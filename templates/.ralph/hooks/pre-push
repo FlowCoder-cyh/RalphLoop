@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# pre-push hook: main 직접 push 방지 (허용 예외 있음)
+# .git/hooks/pre-push 에 설치됨
+
+set -euo pipefail
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then
+  # 예외 허용: 초기 셋업, PRD 생성, fix_plan 업데이트
+  LATEST_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
+  if [[ "$LATEST_MSG" =~ ^WI-(chore|[0-9]{3,4}-chore)\ (프로젝트\ 초기|PRD\ 기반|fix_plan|WI-NNN) ]]; then
+    exit 0
+  fi
+
+  echo ""
+  echo "  main/master 브랜치에 직접 push할 수 없습니다."
+  echo "  PR을 통해 머지하세요."
+  echo ""
+  echo "  일반 커밋: WI-NNN-[type] 형식 (PR을 통해 머지)"
+  echo "  예외: WI-chore 프로젝트 초기*, WI-chore PRD 기반*, WI-chore fix_plan*"
+  echo ""
+  exit 1
+fi

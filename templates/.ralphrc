@@ -1,0 +1,21 @@
+# Ralph Loop Configuration
+# 프로젝트별 설정 파일
+
+# 프로젝트 정보
+PROJECT_NAME=""
+PROJECT_TYPE=""         # typescript, python, rust, go, etc.
+
+# 루프 제어
+MAX_ITERATIONS=50
+RATE_LIMIT_PER_HOUR=80
+COOLDOWN_SEC=5
+ERROR_COOLDOWN_SEC=30
+NO_PROGRESS_LIMIT=3
+
+# 파일 경로
+PROMPT_FILE=".ralph/PROMPT.md"
+FIX_PLAN=".ralph/fix_plan.md"
+
+# 브랜치 규칙
+BRANCH_PREFIX="feature"  # feature, fix, chore
+COMMIT_PREFIX="WI"       # WI-NNN-[type] 한글 작업명 (NNN = 3자리 순번)

@@ -1,0 +1,54 @@
+name: Commit Message Check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate WI commit format
+        run: |
+          COMMITS=$(git log origin/main..HEAD --pretty=format:"%s")
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits to check (PR has no commits beyond main) - skipping validation"
+            exit 0
+          fi
+
+          PATTERN="^WI-[0-9]{3,4}-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
+          PATTERN_SYSTEM="^WI-(chore|docs) .+"
+          PATTERN_MERGE="^Merge "
+          FAILED=0
+
+          while IFS= read -r msg; do
+            # GitHub 자동 생성 Merge 커밋은 스킵
+            if [[ "$msg" =~ $PATTERN_MERGE ]]; then
+              echo "SKIP (merge): '$msg'"
+              continue
+            fi
+            if [[ ! "$msg" =~ $PATTERN && ! "$msg" =~ $PATTERN_SYSTEM ]]; then
+              echo "FAIL: '$msg'"
+              echo "  Expected: WI-NNN-[type] 한글 작업명  (NNN = 3자리 순번)"
+              echo "  Types: feat, fix, docs, style, refactor, test, chore, perf, ci, revert"
+              echo "  System commits (no number): WI-chore ..., WI-docs ..."
+              FAILED=1
+            else
+              echo "OK: '$msg'"
+            fi
+          done <<< "$COMMITS"
+
+          if [ $FAILED -eq 1 ]; then
+            echo ""
+            echo "Commit message format: WI-NNN-[type] 작업 설명"
+            echo "Example: WI-001-feat 사용자 인증 추가"
+            exit 1
+          fi

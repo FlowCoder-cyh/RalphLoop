@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.venv/
+venv/
+target/
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Build artifacts
+dist/
+build/
+out/
+*.o
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ralph Loop logs (local only)
+.ralph/logs/
+.ralph/.claude_session_id
+
+# Test coverage
+coverage/
+.nyc_output/
+htmlcov/
