@@ -40,6 +40,10 @@ PROMPT_FILE="${PROMPT_FILE:-.ralph/PROMPT.md}"
 LOG_DIR=".ralph/logs"
 ALLOWED_TOOLS="${ALLOWED_TOOLS:-Edit,Write,Read,Bash,Glob,Grep}"
 
+# Parallel (1 = 순차, 2+ = 병렬 worktree)
+PARALLEL_COUNT=${PARALLEL_COUNT:-1}
+WORKTREE_DIR=".worktrees"
+
 # State
 call_count=0
 loop_count=0
@@ -110,9 +114,22 @@ restore_state() {
   fi
 }
 
+cleanup_worktrees() {
+  if [[ -d "$WORKTREE_DIR" ]]; then
+    for wt in "$WORKTREE_DIR"/worker-*; do
+      [[ -d "$wt" ]] || continue
+      git worktree remove "$wt" --force 2>/dev/null || rm -rf "$wt"
+    done
+    rmdir "$WORKTREE_DIR" 2>/dev/null || true
+    git worktree prune 2>/dev/null || true
+  fi
+}
+
 cleanup() {
   local exit_code=$?
   printf "\n"
+  # Parallel worktree 정리 (잔여물 방지)
+  cleanup_worktrees 2>/dev/null || true
   if [[ $exit_code -ne 0 ]]; then
     log "⚠️ 비정상 종료 (exit code: $exit_code)"
     save_state "crashed"
@@ -180,6 +197,16 @@ preflight() {
   if [[ "$unchecked" == "0" ]]; then
     echo "ERROR: fix_plan.md에 미완료 WI가 없습니다. /wi:start로 WI를 생성하세요."
     errors=$((errors + 1))
+  fi
+
+  # 병렬 모드: uncommitted changes 사전 검사
+  if [[ ${PARALLEL_COUNT:-1} -gt 1 ]]; then
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      echo "ERROR: 병렬 모드에서는 uncommitted changes가 있으면 안 됩니다."
+      echo "       worktree 생성 시 충돌이 발생합니다. 먼저 커밋하세요."
+      echo "       git status 로 변경사항을 확인하세요."
+      errors=$((errors + 1))
+    fi
   fi
 
   if [[ $errors -gt 0 ]]; then
@@ -313,12 +340,424 @@ build_context() {
   local remaining="${counts##* }"
   local target_wi
   target_wi=$(get_current_wi)
+  local rag
+  rag=$(build_rag_context)
   cat <<EOF
 [Ralph Loop #$loop_count] Completed: $completed | Remaining: $remaining
 [TARGET] ${target_wi}
 [RULE] 위 TARGET 작업 1개만 처리하고 RALPH_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
+${rag}
 EOF
 }
+
+#--- RAG (Retrieval-Augmented Generation) ---
+
+RAG_DIR=".ralph/rag"
+
+generate_codebase_map() {
+  # 프로젝트 파일 구조 + 핵심 정보를 경량 맵으로 생성
+  # 워커가 코드베이스를 즉시 파악하도록 지원
+  mkdir -p "$RAG_DIR"
+  local map_file="$RAG_DIR/codebase-map.md"
+  {
+    echo "# Codebase Map (auto-generated: $(date '+%Y-%m-%d %H:%M'))"
+    echo ""
+    echo "## Structure"
+    tree -I 'node_modules|.git|.next|dist|.worktrees|.ralph' --dirsfirst -L 3 -F 2>/dev/null \
+      || find . -maxdepth 3 -type f ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/.next/*' 2>/dev/null | sort | head -80
+    echo ""
+    # DB Models
+    if [[ -f prisma/schema.prisma ]]; then
+      echo "## DB Models"
+      grep '^model ' prisma/schema.prisma 2>/dev/null | sed 's/model /- /'
+      echo ""
+    fi
+    # Pages
+    local pages
+    pages=$(find src -name 'page.tsx' 2>/dev/null | sort)
+    if [[ -n "$pages" ]]; then
+      echo "## Pages"
+      echo "$pages" | sed 's/^/- /'
+      echo ""
+    fi
+    # API Routes
+    local apis
+    apis=$(find src -name 'route.ts' -path '*/api/*' 2>/dev/null | sort)
+    if [[ -n "$apis" ]]; then
+      echo "## API Routes"
+      echo "$apis" | sed 's/^/- /'
+      echo ""
+    fi
+    # Components (directories only, compact)
+    local comps
+    comps=$(find src -type d -name 'components' 2>/dev/null)
+    if [[ -n "$comps" ]]; then
+      echo "## Component Dirs"
+      echo "$comps" | while read -r d; do
+        echo "- $d/ ($(ls "$d" 2>/dev/null | wc -l) files)"
+      done
+      echo ""
+    fi
+  } > "$map_file" 2>/dev/null
+  log "📋 codebase-map 생성 완료"
+}
+
+update_wi_history() {
+  # 완료된 WI의 변경 파일 목록을 기록 → 다음 워커가 참조
+  local wi_name="$1"
+  mkdir -p "$RAG_DIR"
+  local history_file="$RAG_DIR/wi-history.md"
+  local wi_prefix="${wi_name%% *}"
+  local files_changed=""
+  local commit_hash
+  commit_hash=$(git log --oneline --all --grep="$wi_prefix" -1 --format="%H" 2>/dev/null)
+  if [[ -n "$commit_hash" ]]; then
+    files_changed=$(git diff-tree --no-commit-id --name-only -r "$commit_hash" 2>/dev/null | head -10 | tr '\n' ', ')
+    files_changed="${files_changed%,}"
+  fi
+  # 중복 방지
+  if ! grep -qF -- "$wi_prefix" "$history_file" 2>/dev/null; then
+    echo "- [x] ${wi_name} | ${files_changed:-no-commit}" >> "$history_file"
+  fi
+}
+
+get_all_unchecked_wis() {
+  # batch 무관하게 전체 미완료 WI 추출
+  awk '/^```/{f=!f} !f && /^\- \[ \]/{sub(/^\- \[ \] /,""); sub(/ \| L1:.*$/,""); print}' "$FIX_PLAN" 2>/dev/null
+}
+
+check_wi_implemented() {
+  # 코드베이스에서 WI가 이미 구현되었는지 확인 (git log + 파일 존재)
+  local wi_name="$1"
+  local wi_prefix="${wi_name%% *}"
+
+  # Method 1: git log에 WI 커밋 존재
+  if git log --oneline --all --grep="$wi_prefix" 2>/dev/null | head -1 | grep -q .; then
+    return 0
+  fi
+
+  # Method 2: DB 스키마 WI → prisma model 존재 여부
+  if [[ "$wi_name" == *"DB 스키마"* || "$wi_name" == *"DB스키마"* ]]; then
+    # WI prefix 제거 후 설명부에서 영문 모델명 추출
+    local desc="${wi_name#*feat }"
+    desc="${desc#*fix }"
+    local model
+    model=$(echo "$desc" | grep -oE '[A-Z][a-zA-Z]+' | head -1)
+    if [[ -n "$model" ]] && grep -q "^model $model " prisma/schema.prisma 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  # Method 3: 컴포넌트/페이지 WI → 관련 파일 2개 이상 존재
+  local en_words
+  en_words=$(echo "$wi_name" | grep -oE '[A-Z][a-zA-Z]{3,}' | head -3)
+  if [[ -n "$en_words" ]]; then
+    local match_total=0
+    while IFS= read -r word; do
+      local cnt
+      cnt=$(find src -type f \( -name "*.tsx" -o -name "*.ts" \) -iname "*${word}*" 2>/dev/null | wc -l)
+      match_total=$((match_total + cnt))
+    done <<< "$en_words"
+    if [[ $match_total -ge 2 ]]; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+build_rag_context() {
+  # 워커에게 주입할 RAG 컨텍스트 조립 (토큰 예산 ~2K)
+  local parts=""
+
+  # 1. Codebase map (최대 80줄)
+  if [[ -f "$RAG_DIR/codebase-map.md" ]]; then
+    parts+="[CODEBASE MAP]
+$(head -80 "$RAG_DIR/codebase-map.md")
+"
+  fi
+
+  # 2. WI history (최근 20건)
+  if [[ -f "$RAG_DIR/wi-history.md" ]]; then
+    parts+="[COMPLETED WIs — 아래 파일은 이미 구현됨, 중복 구현 금지]
+$(tail -20 "$RAG_DIR/wi-history.md")
+"
+  fi
+
+  # 3. Guardrails
+  if [[ -f ".ralph/guardrails.md" ]]; then
+    parts+="[GUARDRAILS — 반드시 준수]
+$(cat .ralph/guardrails.md)
+"
+  fi
+
+  echo "$parts"
+}
+
+#--- Parallel Execution (PARALLEL_COUNT > 1) ---
+
+get_next_n_wis() {
+  local n=${1:-1}
+
+  # 첫 번째 미완료 WI의 batch 태그 확인
+  local first_batch
+  first_batch=$(awk '/^```/{f=!f} !f && /^\- \[ \]/{
+    if (match($0, /batch:[A-Za-z0-9]+/)) print substr($0, RSTART+6, RLENGTH-6)
+    exit
+  }' "$FIX_PLAN" 2>/dev/null)
+
+  if [[ -z "$first_batch" ]]; then
+    # batch 태그 없음 — 순서대로 N개 추출 (기존 동작)
+    awk -v n="$n" '/^```/{f=!f} !f && /^\- \[ \]/{sub(/^\- \[ \] /,""); sub(/ \| L1:.*$/,""); print; c++; if(c>=n) exit}' "$FIX_PLAN" 2>/dev/null
+  else
+    # 같은 batch 내 미완료 WI만 N개 추출
+    awk -v n="$n" -v batch="batch:$first_batch" '
+      /^```/{f=!f}
+      !f && /^\- \[ \]/ && index($0, batch) {
+        sub(/^\- \[ \] /,"")
+        sub(/ \| L1:.*$/,"")
+        print
+        c++
+        if(c>=n) exit
+      }
+    ' "$FIX_PLAN" 2>/dev/null
+  fi
+}
+
+setup_worktree() {
+  local wi_name="$1"
+  local idx="$2"
+  local sanitized
+  sanitized=$(echo "$wi_name" | sed 's/[^a-zA-Z0-9_-]/-/g' | cut -c1-40)
+  local branch_name="parallel/worker-${idx}-${sanitized}"
+  local worktree_path="${WORKTREE_DIR}/worker-${idx}"
+
+  # Clean stale worktree
+  if [[ -d "$worktree_path" ]]; then
+    git worktree remove "$worktree_path" --force 2>/dev/null || rm -rf "$worktree_path"
+  fi
+  git branch -D "$branch_name" 2>/dev/null || true
+
+  git worktree add "$worktree_path" -b "$branch_name" HEAD > /dev/null 2>&1 || {
+    log "ERROR: worktree 생성 실패 - worker-${idx}"
+    return 1
+  }
+
+  # Copy gitignored/untracked files needed by claude
+  for f in .ralphrc; do
+    [[ -f "$f" ]] && cp "$f" "$worktree_path/$f" 2>/dev/null || true
+  done
+  mkdir -p "$worktree_path/$LOG_DIR"
+
+  echo "$worktree_path|$branch_name"
+}
+
+mark_wi_done() {
+  # fix_plan.md에서 특정 WI 이름을 포함하는 첫 번째 미완료 항목을 완료 처리
+  # 주의: 패턴이 "- [ ]"로 시작 → grep에 반드시 -- 필요 (대시를 옵션으로 오인 방지)
+  local wi_name="$1"
+  local line_num
+  line_num=$(grep -nF -- "- [ ] ${wi_name}" "$FIX_PLAN" 2>/dev/null | head -1 | cut -d: -f1)
+  if [[ -n "$line_num" ]]; then
+    sed -i "${line_num}s/^\- \[ \]/- [x]/" "$FIX_PLAN"
+    log "  mark_wi_done: ✅ ${wi_name} (line $line_num)"
+    update_wi_history "$wi_name" || true
+  else
+    log "  mark_wi_done: ⚠️ 매칭 실패 — ${wi_name}"
+  fi
+}
+
+recover_stale_wis() {
+  # 워커 실행 전, 이미 구현된 WI를 사전 감지하여 fix_plan 자동 체크
+  # 오탐 방지: Method 1(git log) + Method 2(prisma)만 사용 — Method 3(파일명)은 오탐 위험으로 제외
+  local recovered=0
+  while IFS= read -r wi; do
+    [[ -z "$wi" ]] && continue
+    local wi_prefix="${wi%% *}"
+
+    # Method 1: git log에 WI 커밋 존재
+    if git log --oneline --all --grep="$wi_prefix" 2>/dev/null | head -1 | grep -q .; then
+      mark_wi_done "$wi" || true  # update_wi_history는 mark_wi_done 내부에서 호출
+      recovered=$((recovered + 1))
+      continue
+    fi
+
+    # Method 2: DB 스키마 WI → prisma model 존재 여부
+    if [[ "$wi" == *"DB 스키마"* || "$wi" == *"DB스키마"* ]]; then
+      local desc="${wi#*feat }"
+      desc="${desc#*fix }"
+      local model
+      model=$(echo "$desc" | grep -oE '[A-Z][a-zA-Z]+' | head -1)
+      if [[ -n "$model" ]] && grep -q "^model $model " prisma/schema.prisma 2>/dev/null; then
+        mark_wi_done "$wi" || true  # update_wi_history는 mark_wi_done 내부에서 호출
+        recovered=$((recovered + 1))
+        continue
+      fi
+    fi
+  done < <(get_all_unchecked_wis)
+  if [[ $recovered -gt 0 ]]; then
+    log "🔄 stale WI ${recovered}건 사전 복구 (RAG 코드 분석)"
+    if ! git diff --quiet "$FIX_PLAN" 2>/dev/null; then
+      git add "$FIX_PLAN"
+      git commit -m "WI-chore fix_plan stale WI ${recovered}건 자동 복구" --no-verify 2>/dev/null || true
+    fi
+  fi
+}
+
+execute_parallel() {
+  local -a wis=()
+  local -a pids=()
+  local -a worktree_info=()
+  local -a worktree_wi=()   # worktree_info와 1:1 매핑되는 WI 이름
+
+  # 워커 실행 전 stale WI 사전 복구
+  recover_stale_wis
+
+  while IFS= read -r wi; do
+    [[ -n "$wi" ]] && wis+=("$wi")
+  done < <(get_next_n_wis "$PARALLEL_COUNT")
+
+  local wi_count=${#wis[@]}
+  if [[ $wi_count -eq 0 ]]; then
+    return 1
+  fi
+
+  log "🔀 병렬 실행: ${wi_count}개 WI 동시 처리"
+
+  # RAG 컨텍스트 조립 (워커 공통)
+  local rag_context
+  rag_context=$(build_rag_context)
+
+  # Setup worktrees and launch claude in each
+  for i in "${!wis[@]}"; do
+    local idx=$((i + 1))
+    local wi="${wis[$i]}"
+    log "  [Worker $idx] $wi"
+
+    local info
+    info=$(setup_worktree "$wi" "$idx") || continue
+    worktree_info+=("$info")
+    worktree_wi+=("$wi")
+
+    local wt_path="${info%%|*}"
+
+    # Build parallel context (RAG 포함)
+    local counts completed unchecked total
+    counts=$(count_tasks)
+    completed="${counts%% *}"
+    unchecked="${counts##* }"
+    total=$((completed + unchecked))
+
+    local context
+    context=$(cat <<'_RALPH_CTX_END_'
+[PARALLEL MODE] 이미 작업 브랜치에 있음. 별도 브랜치 생성·PR 생성 불필요. 현재 브랜치에서 직접 커밋할 것. fix_plan.md는 절대 수정하지 말 것(외부 루프가 처리).
+_RALPH_CTX_END_
+)
+    context="[Ralph Loop #$loop_count - Worker $idx/$wi_count] Completed: $completed | Remaining: $unchecked
+[TARGET] ${wi}
+[RULE] 위 TARGET 작업 1개만 처리하고 RALPH_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
+${context}
+${rag_context}"
+
+    local prompt_content
+    prompt_content=$(cat "$PROMPT_FILE")
+    local logfile="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${loop_count}_${idx}.log"
+
+    # Launch in worktree (background)
+    (
+      cd "$wt_path" || exit 1
+      env -u CLAUDECODE claude -p "$prompt_content" \
+        --output-format json \
+        --append-system-prompt "$context" \
+        --allowedTools "$ALLOWED_TOOLS" \
+        > "$logfile" 2>&1
+    ) &
+    pids+=($!)
+    log "  [Worker $idx] PID ${pids[-1]} 시작"
+  done
+
+  if [[ ${#pids[@]} -eq 0 ]]; then
+    log "ERROR: 실행된 워커 없음"
+    return 1
+  fi
+
+  # Wait with progress display
+  log "⏳ ${#pids[@]}개 워커 대기 중..."
+  local elapsed=0
+  local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+  while true; do
+    local running=0
+    for pid in "${pids[@]}"; do
+      kill -0 "$pid" 2>/dev/null && running=$((running + 1))
+    done
+    [[ $running -eq 0 ]] && break
+    local sidx=$((elapsed % 10))
+    printf "\r  ${spin[$sidx]} %dm %02ds | 실행 중: %d/%d  " "$((elapsed/60))" "$((elapsed%60))" "$running" "${#pids[@]}"
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  printf "\r  ✅ 전체 완료 (%dm %02ds)                                    \n" "$((elapsed/60))" "$((elapsed%60))"
+
+  # Sequential merge back to current branch
+  local merged=0 failed=0 skipped=0
+  for i in "${!worktree_info[@]}"; do
+    local info="${worktree_info[$i]}"
+    local wt_path="${info%%|*}"
+    local branch="${info##*|}"
+    local idx=$((i + 1))
+
+    # Check for new commits vs base
+    local wt_sha base_sha
+    wt_sha=$(git -C "$wt_path" rev-parse HEAD 2>/dev/null || echo "none")
+    base_sha=$(git merge-base HEAD "$branch" 2>/dev/null || echo "none")
+
+    if [[ "$wt_sha" == "$base_sha" ]]; then
+      # 워커가 "이미 구현됨"으로 완료 보고했으면 fix_plan 체크
+      local worker_log="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${loop_count}_${idx}.log"
+      if grep -q 'TASKS_COMPLETED_THIS_LOOP: 1' "$worker_log" 2>/dev/null; then
+        mark_wi_done "${worktree_wi[$i]}" || true
+        log "  [Worker $idx] 이미 구현됨 — fix_plan 자동 체크"
+      else
+        log "  [Worker $idx] 변경 없음 — 스킵"
+      fi
+      skipped=$((skipped + 1))
+    else
+      log "  [Worker $idx] 머지: $branch"
+      if git merge "$branch" --no-edit 2>"$LOG_DIR/merge_${idx}.log"; then
+        merged=$((merged + 1))
+        mark_wi_done "${worktree_wi[$i]}" || true
+        log "  [Worker $idx] ✅ 머지 성공"
+      else
+        git merge --abort 2>/dev/null || true
+        failed=$((failed + 1))
+        log "  [Worker $idx] ❌ 머지 충돌 — 롤백"
+        log "  [Worker $idx] 원인: $(head -3 "$LOG_DIR/merge_${idx}.log" 2>/dev/null)"
+      fi
+    fi
+
+    # Cleanup worktree & branch
+    git worktree remove "$wt_path" --force 2>/dev/null || rm -rf "$wt_path"
+    git branch -D "$branch" 2>/dev/null || true
+  done
+
+  git worktree prune 2>/dev/null || true
+  rmdir "$WORKTREE_DIR" 2>/dev/null || true
+
+  log "🔀 병렬 결과: ${merged} 머지, ${failed} 충돌, ${skipped} 스킵"
+  call_count=$((call_count + wi_count))
+
+  # fix_plan.md 변경사항 커밋 (머지 또는 자동 체크로 변경된 경우)
+  if ! git diff --quiet "$FIX_PLAN" 2>/dev/null; then
+    git add "$FIX_PLAN"
+    git commit -m "WI-chore fix_plan 업데이트 (병렬 ${merged}건 머지, ${skipped}건 스킵)" --no-verify 2>/dev/null || true
+  fi
+
+  # 전부 실패면 에러
+  [[ $failed -eq $wi_count ]] && return 1
+  return 0
+}
+
+#--- Sequential Execution ---
 
 execute_claude() {
   local context="$1"
@@ -423,8 +862,33 @@ main() {
   # 이전 실행 상태 복구 확인
   restore_state
 
+  # 병렬 모드: 이전 실행의 stale worktree/branch 정리
+  if [[ $PARALLEL_COUNT -gt 1 ]]; then
+    cleanup_worktrees 2>/dev/null || true
+    # stale parallel branches 정리
+    local stale_branches
+    stale_branches=$(git branch --list 'parallel/worker-*' 2>/dev/null || true)
+    if [[ -n "$stale_branches" ]]; then
+      echo "$stale_branches" | while read -r b; do
+        b=$(echo "$b" | tr -d ' *')
+        git branch -D "$b" 2>/dev/null || true
+      done
+      log "🧹 이전 병렬 브랜치 정리 완료"
+    fi
+  fi
+
+  # RAG: codebase-map 생성 (없거나 1시간 이상 지난 경우)
+  if [[ ! -f "$RAG_DIR/codebase-map.md" ]] || [[ $(find "$RAG_DIR/codebase-map.md" -mmin +60 2>/dev/null) ]]; then
+    generate_codebase_map || true
+  fi
+
   log "=== Ralph Loop Started ==="
   log "Max iterations: $MAX_ITERATIONS | Rate limit: $RATE_LIMIT_PER_HOUR/hr"
+  if [[ $PARALLEL_COUNT -gt 1 ]]; then
+    log "Mode: 병렬 (${PARALLEL_COUNT}x worktree)"
+  else
+    log "Mode: 순차"
+  fi
   log "Allowed tools: $ALLOWED_TOOLS"
 
   last_git_sha=$(git rev-parse HEAD 2>/dev/null || echo "none")
@@ -433,6 +897,11 @@ main() {
   while [[ $loop_count -lt $MAX_ITERATIONS ]]; do
     loop_count=$((loop_count + 1))
     log "--- Iteration $loop_count/$MAX_ITERATIONS ---"
+
+    # 0. RAG: codebase-map 10 iteration마다 갱신
+    if [[ $((loop_count % 10)) -eq 0 ]]; then
+      generate_codebase_map || true
+    fi
 
     # 1. Integrity check
     check_integrity || break
@@ -443,53 +912,74 @@ main() {
       break
     fi
 
-    # 3. 현재 WI 및 진행률 표시
-    local current_wi counts completed unchecked total wi_num
-    current_wi=$(get_current_wi)
-    counts=$(count_tasks)
-    completed="${counts%% *}"
-    unchecked="${counts##* }"
-    total=$((completed + unchecked))
-    wi_num=$((completed + 1))
-    local pct=0
-    if [[ $total -gt 0 ]]; then pct=$((completed * 100 / total)); fi
-    log "📋 WI #$wi_num/$total: $current_wi"
-    log "📊 진행률: $completed/$total ($pct%)"
+    if [[ $PARALLEL_COUNT -gt 1 ]]; then
+      #--- Parallel mode ---
+      local counts completed unchecked total pct
+      counts=$(count_tasks)
+      completed="${counts%% *}"
+      unchecked="${counts##* }"
+      total=$((completed + unchecked))
+      pct=0; [[ $total -gt 0 ]] && pct=$((completed * 100 / total))
+      log "📊 진행률: $completed/$total ($pct%) — 병렬 ${PARALLEL_COUNT}x 실행"
 
-    # 4. Rate limit
-    check_rate_limit
+      check_rate_limit
 
-    # 5. Execute
-    local context
-    context=$(build_context)
+      local result=0
+      execute_parallel || result=$?
 
-    execute_claude "$context"
-    local result=$?
+      validate_post_iteration || {
+        log "Post-validation failed - check guardrails.md"
+      }
+      check_progress || break
+      save_state "running"
 
-    # 6. Post-iteration validation
-    validate_post_iteration || {
-      log "Post-validation failed - check guardrails.md"
-    }
+      if [[ $result -ne 0 ]]; then
+        sleep "$ERROR_COOLDOWN_SEC"
+      else
+        sleep "$COOLDOWN_SEC"
+      fi
+    else
+      #--- Sequential mode (기존 로직) ---
+      local current_wi counts completed unchecked total wi_num
+      current_wi=$(get_current_wi)
+      counts=$(count_tasks)
+      completed="${counts%% *}"
+      unchecked="${counts##* }"
+      total=$((completed + unchecked))
+      wi_num=$((completed + 1))
+      local pct=0
+      if [[ $total -gt 0 ]]; then pct=$((completed * 100 / total)); fi
+      log "📋 WI #$wi_num/$total: $current_wi"
+      log "📊 진행률: $completed/$total ($pct%)"
 
-    # 7. Progress check (circuit breaker) — execute 이후에 체크해야 함
-    check_progress || break
+      check_rate_limit
 
-    # 8. 상태 저장 (매 반복마다 — 비정상 종료 대비)
-    save_state "running"
+      local context
+      context=$(build_context)
 
-    case $result in
-      0) sleep "$COOLDOWN_SEC" ;;
-      1) sleep "$ERROR_COOLDOWN_SEC" ;;
-      2) # Exit signal
-         if check_all_done; then
-           log "Exit signal confirmed - all tasks done"
-           break
-         else
-           log "Exit signal but tasks remain - continuing"
-           sleep "$COOLDOWN_SEC"
-         fi
-         ;;
-    esac
+      local result=0
+      execute_claude "$context" || result=$?
+
+      validate_post_iteration || {
+        log "Post-validation failed - check guardrails.md"
+      }
+      check_progress || break
+      save_state "running"
+
+      case $result in
+        0) sleep "$COOLDOWN_SEC" ;;
+        1) sleep "$ERROR_COOLDOWN_SEC" ;;
+        2) # Exit signal
+           if check_all_done; then
+             log "Exit signal confirmed - all tasks done"
+             break
+           else
+             log "Exit signal but tasks remain - continuing"
+             sleep "$COOLDOWN_SEC"
+           fi
+           ;;
+      esac
+    fi
   done
 
   # 종료 이유에 따른 상태 저장

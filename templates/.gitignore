@@ -39,6 +39,9 @@ desktop.ini
 .ralph/logs/
 .ralph/.claude_session_id
 
+# Parallel worktree (ralph.sh 자동 생성/정리)
+.worktrees/
+
 # Test coverage
 coverage/
 .nyc_output/

@@ -16,6 +16,10 @@ NO_PROGRESS_LIMIT=3
 PROMPT_FILE=".ralph/PROMPT.md"
 FIX_PLAN=".ralph/fix_plan.md"
 
+# 병렬 실행 (1 = 순차, 2+ = 병렬 worktree)
+# 병렬 시 같은 batch 내 WI만 동시 처리 (fix_plan.md batch 태그 기반)
+PARALLEL_COUNT=1
+
 # 브랜치 규칙
 BRANCH_PREFIX="feature"  # feature, fix, chore
 COMMIT_PREFIX="WI"       # WI-NNN-[type] 한글 작업명 (NNN = 3자리 순번)

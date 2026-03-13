@@ -10,8 +10,9 @@ COMMIT_MSG=$(head -1 "$COMMIT_MSG_FILE")
 # WI-NNN-[type] 패턴 검증 (번호 없는 WI-chore도 허용: 시스템 커밋)
 PATTERN="^WI-[0-9]{3,4}-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
 PATTERN_SYSTEM="^WI-(chore|docs) .+"
+PATTERN_MERGE="^Merge "
 
-if [[ ! "$COMMIT_MSG" =~ $PATTERN && ! "$COMMIT_MSG" =~ $PATTERN_SYSTEM ]]; then
+if [[ ! "$COMMIT_MSG" =~ $PATTERN && ! "$COMMIT_MSG" =~ $PATTERN_SYSTEM && ! "$COMMIT_MSG" =~ $PATTERN_MERGE ]]; then
   echo ""
   echo "  커밋 메시지 형식 오류"
   echo ""

@@ -114,6 +114,24 @@ PRD의 L4 태스크를 WI 체크리스트로 변환:
 - 번호 자릿수: WI 총 개수에 따라 자동 결정 (99개 이하 → 3자리, 999개 이하 → 3자리, 1000개 이상 → 4자리)
 - L4 태스크가 없으면 사용자에게 알림 후 중단 (ralph.sh preflight가 빈 fix_plan 감지)
 
+**병렬 배치 태깅 (PARALLEL_COUNT > 1 시 활성화):**
+- `.ralphrc`에 `PARALLEL_COUNT=2` 이상이면 batch 태그를 WI에 자동 부여
+- 형식: `| batch:{영문라벨}` (L1 메타데이터 뒤에 추가)
+- 배치 규칙:
+  - **다른 L1 도메인** → 같은 batch (병렬 처리 가능)
+  - **같은 L1 도메인** → 다른 batch (순차 처리, 파일 충돌 방지)
+  - **L1:Shared** → 항상 단독 batch (공통 컴포넌트는 다른 WI와 병렬 불가)
+  - **DB 스키마 (prisma/schema 등)** → 항상 단독 batch (공유 파일)
+  - **패키지 설치 (package.json 변경)** → 항상 단독 batch
+- 예시:
+  ```markdown
+  - [ ] WI-018-feat 근태 마감 | L1:Attendance > L2:마감 | batch:A
+  - [ ] WI-020-feat 휴가 대시보드 | L1:Leave > L2:대시보드 | batch:A
+  - [ ] WI-019-feat Leave DB 스키마 | L1:Leave > L2:DB | batch:B
+  - [ ] WI-021-feat 공통 네비게이션 | L1:Shared > L2:레이아웃 | batch:C
+  ```
+- `PARALLEL_COUNT=1`이면 batch 태그 생략 (순차 실행이므로 불필요)
+
 ### Phase 4: AGENT.md 업데이트
 
 PRD에서 파악한 기술 스택으로 `.ralph/AGENT.md`의 빌드/테스트 명령을 구체화.
