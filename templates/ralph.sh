@@ -196,6 +196,20 @@ preflight() {
     fi
   done
 
+  # Git hooks 설치 확인 (clone 후 미설치 대응)
+  if [[ -d ".ralph/hooks" ]]; then
+    for hook in .ralph/hooks/*; do
+      [[ -f "$hook" ]] || continue
+      local hook_name
+      hook_name=$(basename "$hook")
+      if [[ ! -f ".git/hooks/$hook_name" ]]; then
+        echo "⚠️  Git hook 미설치 감지: $hook_name → 자동 설치"
+        cp "$hook" ".git/hooks/$hook_name"
+        chmod +x ".git/hooks/$hook_name"
+      fi
+    done
+  fi
+
   # fix_plan에 실제 WI가 있는지 확인 (빈 상태 방지)
   local unchecked
   unchecked=$(grep -c '^\- \[ \]' "$FIX_PLAN" 2>/dev/null || echo "0")
@@ -209,7 +223,7 @@ preflight() {
     if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
       echo "⚠️  uncommitted changes 감지 — 자동 커밋합니다"
       git add -A 2>/dev/null
-      git commit -m "WI-chore 루프 재시작 전 uncommitted changes 자동 커밋" --no-verify 2>/dev/null || true
+      git commit -m "WI-chore 루프 재시작 전 uncommitted changes 자동 커밋" 2>/dev/null || true
       if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
         echo "ERROR: 자동 커밋 실패. git status로 확인하세요."
         errors=$((errors + 1))
@@ -766,7 +780,7 @@ recover_stale_wis() {
     log "🔄 stale WI ${recovered}건 사전 복구 (RAG 코드 분석)"
     if ! git diff --quiet "$FIX_PLAN" 2>/dev/null; then
       git add "$FIX_PLAN"
-      git commit -m "WI-chore fix_plan stale WI ${recovered}건 자동 복구" --no-verify 2>/dev/null || true
+      git commit -m "WI-chore fix_plan stale WI ${recovered}건 자동 복구" 2>/dev/null || true
     fi
   fi
 }
@@ -996,7 +1010,7 @@ ${rag_context}"
     local fp_branch="chore/WI-chore-fix-plan-update-$(date +%H%M%S)"
     git checkout -b "$fp_branch" 2>/dev/null || true
     git add "$FIX_PLAN"
-    git commit -m "WI-chore fix_plan 업데이트 (병렬 ${merged}건 PR, ${skipped}건 스킵)" --no-verify 2>/dev/null || true
+    git commit -m "WI-chore fix_plan 업데이트 (병렬 ${merged}건 PR, ${skipped}건 스킵)" 2>/dev/null || true
     git push -u origin "$fp_branch" 2>/dev/null || true
     gh pr create --base main --head "$fp_branch" --title "WI-chore fix_plan 업데이트" --body "Ralph Loop 자동 생성" 2>/dev/null || true
     gh pr merge --auto --squash 2>/dev/null || true
