@@ -81,8 +81,8 @@ jobs:
             ERROR=$(echo "$line" | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).error)")
             FILE=$(echo "$line" | node -e "console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).file)")
 
-            # 같은 WI의 open regression issue가 있으면 스킵
-            EXISTING=$(gh issue list --label regression --search "$WI_NUM" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+            # 같은 WI의 open regression issue가 있으면 스킵 (정확 매칭)
+            EXISTING=$(gh issue list --label regression --search "$WI_NUM" --state open --json number,title --jq "[.[] | select(.title | startswith(\"$WI_NUM\"))] | length" 2>/dev/null || echo "0")
             if [ "$EXISTING" != "0" ]; then
               echo "Skipping $WI_NUM - regression issue already exists"
               continue

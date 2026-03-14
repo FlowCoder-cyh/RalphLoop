@@ -821,6 +821,8 @@ inject_regression_wis() {
     if [[ -n "${orig_line:-}" ]]; then
       sed -i "${orig_line}a\\- [ ] ${fix_wi} ${title}" "$FIX_PLAN"
       injected=$((injected + 1))
+    else
+      log "⚠️ ${wi_num}: fix_plan에 원본 WI 없음 — fix WI 추가 불가"
     fi
   done <<< "$titles"
 
