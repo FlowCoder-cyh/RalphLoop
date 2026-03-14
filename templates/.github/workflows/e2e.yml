@@ -88,25 +88,7 @@ jobs:
               continue
             fi
 
-            ISSUE_BODY=$(cat <<ISSUEEOF
-## E2E 테스트 실패
-
-| 항목 | 값 |
-|------|-----|
-| WI | ${WI_NUM} |
-| 테스트 | ${TITLE} |
-| 파일 | ${FILE} |
-| 커밋 | ${{ github.sha }} |
-
-## 에러 로그
-
-${ERROR}
-
-## 조치
-ralph.sh가 다음 루프 시작 시 이 이슈를 감지하여 fix_plan에 ${WI_NUM}-N-fix WI를 자동 추가합니다.
-수정 PR에 해당 실패 케이스의 회귀 테스트 1개를 반드시 포함하세요.
-ISSUEEOF
-)
+            ISSUE_BODY="E2E 테스트 실패: WI=${WI_NUM}, 테스트=${TITLE}, 파일=${FILE}, 커밋=${{ github.sha }}. 에러: ${ERROR}"
             gh issue create \
               --label regression \
               --title "${WI_NUM} e2e 실패: ${TITLE}" \
