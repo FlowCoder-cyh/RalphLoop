@@ -339,7 +339,7 @@ sync_completed_file() {
   while IFS= read -r prefix; do
     [[ -z "$prefix" ]] && continue
     # origin/main의 fix_plan에서 이 WI가 아직 [ ]이면 유지
-    if git show origin/main:"$FIX_PLAN" 2>/dev/null | grep -qF "- [ ] ${prefix}"; then
+    if git show origin/main:"$FIX_PLAN" 2>/dev/null | grep -qF -- "- [ ] ${prefix}"; then
       echo "$prefix"
     fi
   done < "$COMPLETED_FILE" > "$temp_file"
