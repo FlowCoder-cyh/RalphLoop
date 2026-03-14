@@ -273,6 +273,7 @@ preflight() {
 log() {
   local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
   echo "$msg"
+  [[ -d "$LOG_DIR" ]] || mkdir -p "$LOG_DIR"
   echo "$msg" >> "$LOG_DIR/ralph.log"
 }
 
