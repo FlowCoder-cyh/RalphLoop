@@ -35,7 +35,10 @@ git checkout -b main
 ```
 
 ### Step 3: 프로젝트 구조 생성
-아래 구조를 현재 디렉토리에 생성:
+**1단계: `~/.claude/templates/ralph/`에서 템플릿 복사** (ralph.sh, PROMPT.md, hooks, workflows, .gitignore 등)
+**2단계: 아래 중 템플릿에 없는 파일만 직접 생성** (.claude/rules/, docs/, fix_plan.md, guardrails.md, AGENT.md)
+
+최종 구조:
 ```
 .github/
   workflows/
