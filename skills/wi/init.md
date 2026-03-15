@@ -98,15 +98,28 @@ if [[ ! -d "$TEMPLATE_DIR" ]]; then
   exit 1
 fi
 
-# 템플릿 복사 (기존 파일 덮어쓰기)
+# 템플릿 복사 (중첩 방지: 개별 파일 단위)
 cp "$TEMPLATE_DIR/ralph.sh" ./ralph.sh
 cp "$TEMPLATE_DIR/.gitignore" ./.gitignore
 cp "$TEMPLATE_DIR/.gitattributes" ./.gitattributes
 cp "$TEMPLATE_DIR/.editorconfig" ./.editorconfig
 cp "$TEMPLATE_DIR/CLAUDE.md" ./CLAUDE.md
-cp -r "$TEMPLATE_DIR/.ralph/" ./.ralph/
-cp -r "$TEMPLATE_DIR/.github/" ./.github/
-chmod +x ralph.sh .ralph/scripts/*.sh 2>/dev/null || true
+
+# .ralph/ 내부 파일 복사 (디렉토리는 이미 Step 3에서 생성됨)
+cp "$TEMPLATE_DIR/.ralph/PROMPT.md" ./.ralph/PROMPT.md
+cp "$TEMPLATE_DIR/.ralph/hooks/commit-msg" ./.ralph/hooks/commit-msg
+cp "$TEMPLATE_DIR/.ralph/hooks/pre-push" ./.ralph/hooks/pre-push
+mkdir -p ./.ralph/scripts
+cp "$TEMPLATE_DIR/.ralph/scripts/enqueue-pr.sh" ./.ralph/scripts/enqueue-pr.sh
+
+# .github/ 내부 파일 복사
+mkdir -p ./.github/workflows
+cp "$TEMPLATE_DIR/.github/PULL_REQUEST_TEMPLATE.md" ./.github/PULL_REQUEST_TEMPLATE.md
+cp "$TEMPLATE_DIR/.github/workflows/ci.yml" ./.github/workflows/ci.yml
+cp "$TEMPLATE_DIR/.github/workflows/commit-check.yml" ./.github/workflows/commit-check.yml
+cp "$TEMPLATE_DIR/.github/workflows/e2e.yml" ./.github/workflows/e2e.yml
+
+chmod +x ralph.sh .ralph/hooks/* .ralph/scripts/*.sh 2>/dev/null || true
 ```
 
 **복사 후 프로젝트별 커스터마이징만 수행:**
