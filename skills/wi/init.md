@@ -81,21 +81,32 @@ CLAUDE.md               # 프로젝트 정보 (규칙은 rules/ 참조)
 #### AGENT.md (프로젝트 타입별)
 프로젝트 타입에 맞는 lint/build/test 명령 기입.
 
-#### ralph.sh (필수 기능 — 간소화 금지)
-Ralph Loop의 핵심 스크립트. 아래 기능을 **모두** 포함해야 함:
+#### ralph.sh, PROMPT.md, hooks, workflows 등 (템플릿에서 복사)
+**직접 생성하지 않음.** `~/.claude/templates/ralph/`에서 복사합니다.
 
-1. **UTF-8 설정**: LANG, LC_ALL, PYTHONUTF8, PYTHONIOENCODING + Windows chcp 감지
-2. **.ralphrc 로드**: 존재 시 source
-3. **설정 변수**: MAX_ITERATIONS(기본 50), RATE_LIMIT_PER_HOUR(기본 80), COOLDOWN_SEC(기본 5), ERROR_COOLDOWN_SEC(기본 30), ALLOWED_TOOLS(기본 "Edit,Write,Read,Bash,Glob,Grep")
-4. **preflight()**: claude CLI 존재, gh CLI 존재 + 인증(`gh auth status`), git 저장소, 필수 파일(PROMPT.md, fix_plan.md, AGENT.md, .ralphrc, guardrails.md), fix_plan에 미완료 WI 존재 확인
-5. **count_tasks()**: 코드블록(`\`\`\``) 내부 체크박스 제외, awk로 unchecked/completed 카운트
-6. **check_all_done()**: completed=0 && unchecked=0 → 빈 상태(완료 아님) 구분
-7. **check_progress()**: git SHA + `git diff --quiet` 로 uncommitted 변경 감지, 연속 무진행 시 circuit breaker (NO_PROGRESS_LIMIT 기본 3)
-8. **check_rate_limit()**: 시간 기반 rate limiting (경과 시간 계산)
-9. **execute_claude()**: `claude -p "$prompt" --output-format json --append-system-prompt "$context" --allowedTools "$ALLOWED_TOOLS"`, EXIT_SIGNAL/에러 감지
-10. **validate_post_iteration()**: 커밋 메시지 WI-NNN-[type] 형식 검증, .ralph/ 파일 삭제 감지, 위반 시 guardrails.md 기록
-11. **main()**: preflight → while 루프(integrity→all_done→progress→rate_limit→execute→validate→cooldown)
-12. **종료 시**: 미머지 PR 확인 (`gh pr list --state open`), 최종 통계 출력
+```bash
+# 템플릿 디렉토리 확인
+TEMPLATE_DIR="$HOME/.claude/templates/ralph"
+if [[ ! -d "$TEMPLATE_DIR" ]]; then
+  echo "ERROR: 템플릿이 설치되지 않았습니다."
+  echo "  settings 저장소에서 설치하세요:"
+  echo "  git clone https://github.com/FlowCoder-cyh/RalphLoop.git /tmp/ralph-templates"
+  echo "  cp -r /tmp/ralph-templates/templates/ ~/.claude/templates/ralph/"
+  exit 1
+fi
+
+# 템플릿 복사 (기존 파일 덮어쓰기)
+cp "$TEMPLATE_DIR/ralph.sh" ./ralph.sh
+cp "$TEMPLATE_DIR/.gitignore" ./.gitignore
+cp "$TEMPLATE_DIR/.gitattributes" ./.gitattributes
+cp "$TEMPLATE_DIR/.editorconfig" ./.editorconfig
+cp "$TEMPLATE_DIR/CLAUDE.md" ./CLAUDE.md
+cp -r "$TEMPLATE_DIR/.ralph/" ./.ralph/
+cp -r "$TEMPLATE_DIR/.github/" ./.github/
+chmod +x ralph.sh .ralph/scripts/*.sh 2>/dev/null || true
+```
+
+**복사 후 프로젝트별 커스터마이징만 수행:**
 
 #### .ralphrc
 `PROJECT_NAME`, `PROJECT_TYPE` 필드를 인자 값으로 채움.
