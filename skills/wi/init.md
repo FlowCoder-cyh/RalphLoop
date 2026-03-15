@@ -120,6 +120,10 @@ cp "$TEMPLATE_DIR/.github/workflows/ci.yml" ./.github/workflows/ci.yml
 cp "$TEMPLATE_DIR/.github/workflows/commit-check.yml" ./.github/workflows/commit-check.yml
 cp "$TEMPLATE_DIR/.github/workflows/e2e.yml" ./.github/workflows/e2e.yml
 
+# .claude/rules/ 운영 규칙 복사
+mkdir -p ./.claude/rules
+cp "$TEMPLATE_DIR/.claude/rules/ralph-operations.md" ./.claude/rules/ralph-operations.md
+
 chmod +x ralph.sh .ralph/hooks/* .ralph/scripts/*.sh 2>/dev/null || true
 ```
 
