@@ -31,6 +31,9 @@
 # 예: npm install / pip install -r requirements.txt / cargo fetch
 ```
 
+## 인프라 환경
+<!-- /wi:start Phase 4에서 자동 채워짐. 비어있으면 DB 미설정 상태 — mock 허용 -->
+
 ## 프로젝트 구조
 ```
 # /wi:init 시 프로젝트 구조가 여기에 기록됩니다

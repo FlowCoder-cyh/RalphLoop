@@ -34,7 +34,7 @@ append-system-prompt에 `[PARALLEL MODE]`가 포함되면 병렬 worktree에서 
 
 ### 1. 상태 파악
 - `.ralph/fix_plan.md` 읽기 → 첫 번째 `- [ ]` 항목 선택
-- `.ralph/AGENT.md` 읽기 → 빌드/테스트 명령 확인
+- `.ralph/AGENT.md` 읽기 → 빌드/테스트 명령 확인 + **"인프라 환경" 섹션 확인 (DB 모델, mock 금지 여부)**
 - `.ralph/guardrails.md` 읽기 → 프로젝트별 금지사항 확인
 - **참고**: 완료 상태는 `.ralph/completed_wis.txt`로 관리됨 (외부 루프가 처리, 워커는 터치 불필요)
 
@@ -50,8 +50,37 @@ git pull origin main
 git checkout -b feature/WI-001-feat-{작업명-kebab}
 ```
 
-### 3. TDD 구현 (RED → GREEN → 커밋)
+### 3. WI 유형 판별 (구현 전 필수)
+
+WI 내용이 아래에 해당하면 **구현하지 않고 스킵**:
+
+| 스킵 대상 | 이유 | 처리 |
+|-----------|------|------|
+| E2E 테스트 작성 (Playwright 셀렉터, 시나리오) | `claude -p`는 브라우저를 띄울 수 없어 실제 UI 확인 불가. 셀렉터를 추측하면 전부 실패함 | guardrails.md에 기록 + 스킵 |
+| UI 시각적 검증 (스크린샷 비교, 레이아웃 확인) | headless 환경에서 시각적 판단 불가 | guardrails.md에 기록 + 스킵 |
+
+**스킵 시 출력:**
+```
+---RALPH_STATUS---
+STATUS: IN_PROGRESS
+TASKS_COMPLETED_THIS_LOOP: 1
+FILES_MODIFIED: 0
+TESTS_STATUS: NOT_RUN
+EXIT_SIGNAL: false
+SUMMARY: WI-{NNN} 스킵 — E2E 테스트는 대화형 세션에서 처리 필요
+---END_RALPH_STATUS---
+```
+
+**단위 테스트(jest/vitest)는 스킵 대상이 아닙니다.** 코드 로직만 검증하는 테스트는 워커가 작성합니다.
+
+### 4. TDD 구현 (RED → GREEN → 커밋)
 **반드시 테스트를 먼저 작성하고, 그 다음 구현합니다.**
+
+**AGENT.md "인프라 환경"에 "mock 금지"가 명시된 경우:**
+- `prisma/schema.prisma`의 모델을 사용하여 CRUD 구현
+- 하드코딩 배열, 인메모리 데이터, mock API 응답 사용 금지
+- `import { PrismaClient } from '@prisma/client'` 또는 기존 prisma 인스턴스 사용
+- **"인프라 환경" 섹션이 없거나 비어있으면: 제한 없음**
 
 1. **RED**: 구현할 기능의 테스트를 먼저 작성 → `npm test` 실행 → 실패 확인
 2. **GREEN**: 테스트를 통과하는 최소한의 코드 구현
@@ -62,7 +91,7 @@ git checkout -b feature/WI-001-feat-{작업명-kebab}
 - .gitignore에 포함된 파일은 절대 커밋하지 않음
 - fix_plan.md는 절대 수정하지 않음
 
-### 4. 검증
+### 5. 검증
 ```bash
 # AGENT.md에 정의된 명령 순서대로 실행
 # lint → build → test (전체 suite)
@@ -74,7 +103,7 @@ git checkout -b feature/WI-001-feat-{작업명-kebab}
     → guardrails.md에 에러 패턴·증상 기록 → 다음 WI로 이동
 - 근본 분석 2회 실패 시: guardrails.md에 시도한 접근과 실패 원인 상세 기록 후 다음 WI로 이동
 
-### 5. 커밋 & PR & 머지
+### 6. 커밋 & PR & 머지
 ```bash
 # 커밋 (git add -A 대신 변경 파일만 명시적으로 추가)
 git add {변경된 파일들}
@@ -129,12 +158,12 @@ git pull origin main
 - 다음 WI 브랜치 생성 전 반드시 `git pull origin main`으로 최신 상태 동기화
 - 이전 PR이 아직 머지 대기 중이면 머지 완료까지 대기
 
-### 6. fix_plan.md — 수정 금지
+### 7. fix_plan.md — 수정 금지
 - **fix_plan.md는 워커가 절대 수정하지 않음**
 - 완료 상태는 외부 루프(ralph.sh)가 루프 종료 시 일괄 동기화
 - `git add .ralph/fix_plan.md` 금지, `sed` 편집 금지
 
-### 7. 상태 출력 후 즉시 종료
+### 8. 상태 출력 후 즉시 종료
 ```
 ---RALPH_STATUS---
 STATUS: IN_PROGRESS | COMPLETE
