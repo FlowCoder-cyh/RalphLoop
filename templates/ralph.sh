@@ -879,15 +879,7 @@ reconcile_fix_plan() {
         if [[ -n "${fp_pr_url:-}" ]]; then
           local fp_pr_number
           fp_pr_number=$(echo "$fp_pr_url" | grep -oE '[0-9]+$')
-          local fp_pr_node_id
-          fp_pr_node_id=$(gh api graphql -f query="{ repository(owner: \"$(gh repo view --json owner --jq '.owner.login' 2>/dev/null)\", name: \"$(gh repo view --json name --jq '.name' 2>/dev/null)\") { pullRequest(number: $fp_pr_number) { id } } }" --jq '.data.repository.pullRequest.id' 2>/dev/null || true)
-          if [[ -n "${fp_pr_node_id:-}" ]]; then
-            gh api graphql -f query="mutation { enqueuePullRequest(input: { pullRequestId: \"$fp_pr_node_id\" }) { mergeQueueEntry { position } } }" 2>/dev/null || {
-              gh pr merge "$fp_pr_url" --auto --squash 2>/dev/null || true
-            }
-          else
-            gh pr merge "$fp_pr_url" --auto --squash 2>/dev/null || true
-          fi
+          bash .ralph/scripts/enqueue-pr.sh "$fp_pr_number" 2>/dev/null || true
           log "📋 fix_plan PR: $fp_pr_url"
         fi
       fi
@@ -1138,18 +1130,9 @@ ${rag_context}"
           # merge queue에 등록 (CI 통과 시 자동 머지)
           local pr_number
           pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
-          local pr_node_id
-          pr_node_id=$(gh api graphql -f query="{ repository(owner: \"$(gh repo view --json owner --jq '.owner.login' 2>/dev/null)\", name: \"$(gh repo view --json name --jq '.name' 2>/dev/null)\") { pullRequest(number: $pr_number) { id } } }" --jq '.data.repository.pullRequest.id' 2>/dev/null || true)
-          if [[ -n "${pr_node_id:-}" ]]; then
-            gh api graphql -f query="mutation { enqueuePullRequest(input: { pullRequestId: \"$pr_node_id\" }) { mergeQueueEntry { position } } }" 2>/dev/null || {
-              # merge queue 미지원 시 fallback
-              gh pr merge "$pr_url" --auto --squash 2>/dev/null || true
-            }
-          else
-            gh pr merge "$pr_url" --auto --squash 2>/dev/null || {
-              log "  [Worker $idx] ⚠️ auto-merge 설정 실패 (수동 머지 필요)"
-            }
-          fi
+          bash .ralph/scripts/enqueue-pr.sh "$pr_number" 2>/dev/null || {
+            log "  [Worker $idx] ⚠️ merge queue 등록 실패 (수동 머지 필요)"
+          }
         else
           failed=$((failed + 1))
           log "  [Worker $idx] ❌ PR 생성 실패"
