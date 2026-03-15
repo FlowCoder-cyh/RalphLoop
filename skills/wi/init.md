@@ -235,7 +235,7 @@ fi
 
 🔗 GitHub: https://github.com/{org}/{project-name}
 
-📋 다음 단계: /wi:prd 로 PRD 생성
+📋 다음 단계: /wi:prd → /wi:env → /wi:start
 ```
 
 ## Boundaries

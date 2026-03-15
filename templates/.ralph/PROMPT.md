@@ -36,6 +36,7 @@ append-system-prompt에 `[PARALLEL MODE]`가 포함되면 병렬 worktree에서 
 - `.ralph/fix_plan.md` 읽기 → 첫 번째 `- [ ]` 항목 선택
 - `.ralph/AGENT.md` 읽기 → 빌드/테스트 명령 확인
 - `.ralph/guardrails.md` 읽기 → 프로젝트별 금지사항 확인
+- **참고**: 완료 상태는 `.ralph/completed_wis.txt`로 관리됨 (외부 루프가 처리, 워커는 터치 불필요)
 
 ### 2. 브랜치 생성
 ```bash
