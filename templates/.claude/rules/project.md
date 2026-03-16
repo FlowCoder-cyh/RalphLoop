@@ -1,26 +1,47 @@
-# Project Rules
+# {PROJECT_NAME} - Project Rules
 
-이 파일은 글로벌 규칙(Claude Code 설정 디렉토리 `rules/wi-*.md`, install.sh로 설치)을 상속하며,
-프로젝트 고유 규칙만 추가로 정의합니다.
-
+이 파일은 글로벌 규칙(~/.claude/rules/wi-*.md)을 상속하며, 프로젝트 고유 규칙만 추가합니다.
 **글로벌 규칙과 충돌 시 글로벌 규칙이 우선합니다.**
 
 ## 프로젝트 정보
-- 이름: {PROJECT_NAME}
-- 타입: {PROJECT_TYPE}
+- **이름**: {PROJECT_NAME}
+- **타입**: {PROJECT_TYPE}
+
+## 프로젝트 규칙 체크리스트 (필수)
+작업 시작 전 다음 항목 확인:
+- [ ] **경계 분리**: 변경 전 "이 코드의 경계는 무엇인가?" 정의
+- [ ] **모듈화**: 모듈 구조 준수 (공개 API + 내부 구현 분리)
+- [ ] **캡슐화**: 공개 API만 외부 노출, 내부 구현 직접 import 금지
+- [ ] **컴포넌트 재사용**: 2회 이상 반복 → 분리
+- [ ] **하드코딩 금지**: 상수는 별도 파일로 분리
+- [ ] **UTF-8**: 모든 파일 UTF-8 (BOM 없음)
+
+## Code Quality Rules
+
+### 컴포넌트 재사용
+- 같은 UI/로직이 2번 이상 나오면 컴포넌트로 분리
+- 기존 컴포넌트 확인 후 새로 만들기 (중복 생성 금지)
+
+### 하드코딩 금지
+- 문자열, 숫자, URL 직접 코드에 박지 않기
+- 상수는 constants/ 또는 설정 파일로 분리
+- 환경별 값은 환경변수 사용
+
+### UTF-8 인코딩
+- 모든 파일 UTF-8 (BOM 없음)
+- 파일 읽기/쓰기 시 utf-8 명시
+
+## 프로젝트 고유 규칙
+<!-- /wi:init에서 스택별 규칙 추가 -->
 
 ## 워크플로우
-- `/wi:init` → `/wi:prd` → `/wi:start` → `/wi:status`
+- `/wi:init` → `/wi:prd` → `/wi:env` → `/wi:start` → `/wi:status`
 
 ## CI/CD
 - PR 생성 시 자동 실행: lint → build → test → commit-check
 - 모든 체크 통과 필수
 - 머지 후 브랜치 자동 삭제
 
-## 파일 구조
-- `.ralph/`: Ralph Loop 상태 및 설정
-- `docs/L0~L4`: 문서 계층구조
-- `.github/`: CI/CD 워크플로우 및 PR 템플릿
-
-## 프로젝트 고유 규칙
-<!-- /wi:init 시 프로젝트 타입에 맞게 추가 -->
+## RAG 컨텍스트
+- 작업 시작 전 `.claude/rules/rag-context.md`의 주제-파일 매핑에 따라 관련 RAG 로드
+- 작업 중 변경사항은 해당 RAG 파일에 즉시 반영
