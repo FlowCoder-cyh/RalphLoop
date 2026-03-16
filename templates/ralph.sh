@@ -1521,10 +1521,13 @@ main() {
         log "Post-validation failed - check guardrails.md"
       }
 
-      # 순차 모드 패턴 기록
+      # 순차 모드: 완료 기록 + 패턴 기록
       local current_sha_now
       current_sha_now=$(git rev-parse HEAD 2>/dev/null || echo "none")
       if [[ "$current_sha_now" != "$last_git_sha" ]]; then
+        # SHA 변경 = PR 머지됨 → completed_wis.txt에 기록
+        mark_wi_done "$current_wi" || true
+        last_git_sha="$current_sha_now"
         local seq_files
         seq_files=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | head -5 | tr '\n' ', ')
         record_pattern "$current_wi" "merged" "${seq_files%,}" "$iter_elapsed" || true
