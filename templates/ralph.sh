@@ -27,6 +27,16 @@ if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
   chcp.com 65001 > /dev/null 2>&1 || true
 fi
 
+# macOS/Linux sed -i 호환 래퍼
+# macOS BSD sed: sed -i '' 's/...' / Linux GNU sed: sed -i 's/...'
+sedi() {
+  if [[ "$(uname -s)" == Darwin* ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -932,7 +942,7 @@ inject_regression_wis() {
     local orig_line
     orig_line=$(grep -nE "^\- \[[x ]\] ${wi_num}-(feat|fix|docs|test|chore)" "$FIX_PLAN" 2>/dev/null | tail -1 | cut -d: -f1 || true)
     if [[ -n "${orig_line:-}" ]]; then
-      sed -i "${orig_line}a\\- [ ] ${fix_wi} ${title}" "$FIX_PLAN"
+      sedi "${orig_line}a\\- [ ] ${fix_wi} ${title}" "$FIX_PLAN"
       injected=$((injected + 1))
     else
       log "⚠️ ${wi_num}: fix_plan에 원본 WI 없음 — fix WI 추가 불가"
@@ -966,7 +976,7 @@ reconcile_fix_plan() {
     local line_num
     line_num=$(grep -nF -- "- [ ] ${prefix}" "$FIX_PLAN" 2>/dev/null | head -1 | cut -d: -f1)
     if [[ -n "$line_num" ]]; then
-      sed -i "${line_num}s/^\- \[ \]/- [x]/" "$FIX_PLAN"
+      sedi "${line_num}s/^\- \[ \]/- [x]/" "$FIX_PLAN"
       changed=$((changed + 1))
     fi
   done < "$COMPLETED_FILE"

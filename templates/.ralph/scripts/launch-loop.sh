@@ -60,12 +60,27 @@ case "$(uname -s)" in
     fi
     ;;
   Darwin*)
-    if osascript -e 'exists application "iTerm"' 2>/dev/null; then
-      osascript -e "tell application \"iTerm\" to create window with default profile command \"cd '$PROJECT_DIR' && bash ralph.sh\""
+    # tmux: Claude Code 세션과 완전 독립 (stdout 리다이렉트 문제 없음)
+    if command -v tmux &>/dev/null; then
+      tmux kill-session -t ralph 2>/dev/null || true
+      tmux new-session -d -s ralph -c "$PROJECT_DIR" "bash ralph.sh; echo ''; echo 'Ralph Loop 종료. Enter로 닫기'; read"
+      echo "LAUNCHED"
+      echo ""
+      echo "🚀 Ralph Loop이 tmux 세션 'ralph'에서 시작되었습니다!"
+      echo "   모니터링: tmux attach -t ralph"
+      echo "   로그: tail -f $PROJECT_DIR/.ralph/logs/ralph.log"
     else
-      osascript -e "tell application \"Terminal\" to do script \"cd '$PROJECT_DIR' && bash ralph.sh\""
+      # tmux 없으면 osascript fallback
+      if osascript -e 'exists application "iTerm"' 2>/dev/null; then
+        osascript -e "tell application \"iTerm\" to create window with default profile command \"cd '$PROJECT_DIR' && bash ralph.sh\""
+      else
+        osascript -e "tell application \"Terminal\" to do script \"cd '$PROJECT_DIR' && bash ralph.sh\""
+      fi
+      echo "LAUNCHED"
+      echo ""
+      echo "💡 tmux 설치 권장: brew install tmux"
+      echo "   tmux를 사용하면 Claude Code 세션과 완전 독립적으로 실행됩니다."
     fi
-    echo "LAUNCHED"
     ;;
   *)
     echo "ERROR: 지원하지 않는 OS입니다. 수동 실행: cd $PROJECT_DIR && bash ralph.sh"
