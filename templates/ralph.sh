@@ -1624,6 +1624,14 @@ execute_claude() {
     return 1
   fi
 
+  # RALPH_STATUS에서 TESTS_ADDED 파싱 → 0이면 TDD 미수행 경고
+  local tests_added
+  tests_added=$(echo "$output" | grep -oE 'TESTS_ADDED:\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+  if [[ "${tests_added:-}" == "0" ]]; then
+    log "WARNING: TESTS_ADDED=0 — TDD 미수행 의심"
+    echo "### [$(date '+%Y-%m-%d %H:%M')] TDD 미수행: 테스트 0개 추가 (Iteration #$loop_count)" >> .ralph/guardrails.md
+  fi
+
   return 0
 }
 

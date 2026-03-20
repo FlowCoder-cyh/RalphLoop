@@ -137,6 +137,9 @@ bash .ralph/scripts/enqueue-pr.sh $(gh pr view --json number --jq '.number')
 STATUS: IN_PROGRESS | COMPLETE
 TASKS_COMPLETED_THIS_LOOP: 1
 FILES_MODIFIED: {수}
+FILES_LIST: {변경된 파일 경로 목록, 쉼표 구분}
+TESTS_ADDED: {이번 WI에서 새로 추가한 테스트 수}
+TESTS_TOTAL: {전체 테스트 suite 수}
 TESTS_STATUS: PASSING | FAILING | NOT_RUN
 EXIT_SIGNAL: false | true
 SUMMARY: {완료한 WI 한 줄 요약}
@@ -145,3 +148,4 @@ SUMMARY: {완료한 WI 한 줄 요약}
 
 **이 블록을 출력한 후 반드시 즉시 종료하세요. 다음 WI로 넘어가지 마세요.**
 **TASKS_COMPLETED_THIS_LOOP는 항상 1입니다. 0이면 구현 실패, 2 이상이면 규칙 위반.**
+**TESTS_ADDED가 0이면 TDD를 수행하지 않은 것으로 간주됩니다.**
