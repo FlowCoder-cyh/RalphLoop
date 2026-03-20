@@ -587,6 +587,34 @@ validate_post_iteration() {
     fi
   fi
 
+  # 8. WI 수용 기준 최소 검증 (키워드 매칭)
+  local current_wi_desc
+  current_wi_desc=$(get_current_wi 2>/dev/null || true)
+  if [[ -n "$current_wi_desc" && -n "$changed_files_all" ]]; then
+    # "GET" 수용 기준인데 GET 핸들러 없음
+    if echo "$current_wi_desc" | grep -qi "GET" && echo "$changed_files_all" | grep -qE 'route\.(ts|js)$'; then
+      local has_get=false
+      for rf in $(echo "$changed_files_all" | grep -E 'route\.(ts|js)$'); do
+        grep -q "GET\|export.*get\|export.*GET" "$rf" 2>/dev/null && has_get=true
+      done
+      if [[ "$has_get" == false ]]; then
+        log "WARNING: WI에 GET 명시됐으나 API 라우트에 GET 핸들러 없음"
+        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: GET 핸들러 누락 (Iteration #$loop_count)" >> .ralph/guardrails.md
+      fi
+    fi
+    # "POST" 수용 기준인데 POST 핸들러 없음
+    if echo "$current_wi_desc" | grep -qi "POST" && echo "$changed_files_all" | grep -qE 'route\.(ts|js)$'; then
+      local has_post=false
+      for rf in $(echo "$changed_files_all" | grep -E 'route\.(ts|js)$'); do
+        grep -q "POST\|export.*post\|export.*POST" "$rf" 2>/dev/null && has_post=true
+      done
+      if [[ "$has_post" == false ]]; then
+        log "WARNING: WI에 POST 명시됐으나 API 라우트에 POST 핸들러 없음"
+        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: POST 핸들러 누락 (Iteration #$loop_count)" >> .ralph/guardrails.md
+      fi
+    fi
+  fi
+
   if [[ $violations -gt 0 ]]; then
     log "POST-VALIDATION: $violations violations detected"
     echo "### [$(date '+%Y-%m-%d %H:%M')] 자동 감지: $violations건 규칙 위반 (Iteration #$loop_count)" >> .ralph/guardrails.md

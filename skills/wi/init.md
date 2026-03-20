@@ -123,6 +123,13 @@ cp "$TEMPLATE_DIR/.github/workflows/e2e.yml" ./.github/workflows/e2e.yml
 # .claude/rules/ 운영 규칙 복사
 mkdir -p ./.claude/rules
 cp "$TEMPLATE_DIR/.claude/rules/ralph-operations.md" ./.claude/rules/ralph-operations.md
+cp "$TEMPLATE_DIR/.claude/rules/project.md" ./.claude/rules/project.md
+
+# .claude/settings.json (Stop hook — RAG 업데이트 강제)
+cp "$TEMPLATE_DIR/.claude/settings.json" ./.claude/settings.json
+
+# Stop hook 스크립트
+cp "$TEMPLATE_DIR/.ralph/scripts/stop-rag-check.sh" ./.ralph/scripts/stop-rag-check.sh
 
 chmod +x ralph.sh .ralph/hooks/* .ralph/scripts/*.sh 2>/dev/null || true
 ```
