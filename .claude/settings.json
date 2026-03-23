@@ -13,6 +13,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .flowset/scripts/stop-vault-sync.sh",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }
