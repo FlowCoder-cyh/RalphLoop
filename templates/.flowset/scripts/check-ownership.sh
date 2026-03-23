@@ -36,7 +36,7 @@ fi
 file_path=$(echo "$file_path" | sed 's|\\|/|g')
 
 # ownership.json 읽기
-OWNERSHIP_FILE=".ralph/ownership.json"
+OWNERSHIP_FILE=".flowset/ownership.json"
 if [[ ! -f "$OWNERSHIP_FILE" ]]; then
   exit 0
 fi

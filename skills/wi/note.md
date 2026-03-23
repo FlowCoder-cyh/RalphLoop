@@ -27,7 +27,7 @@ personas: []
 ## Behavioral Flow
 
 ### 기록
-`.ralph/notes.md`에 append:
+`.flowset/notes.md`에 append:
 
 ```markdown
 ### [YYYY-MM-DD HH:MM] {요약}
@@ -52,15 +52,15 @@ personas: []
 ```
 
 ### 조회
-`/wi:note --list` → `.ralph/notes.md` 전체 출력
+`/wi:note --list` → `.flowset/notes.md` 전체 출력
 
 ### /wi:status 연동
 `/wi:status`에서 notes.md 내용도 함께 표시
 
 ## 파일 위치 (우선순위)
 
-1. **프로젝트 내** (우선): `.ralph/notes.md` — `.ralph/` 디렉토리가 있으면 여기에 기록
-2. **프로젝트 외** (fallback): `~/.claude/projects/{project-encoded}/notes.md` — git 미연결이거나 .ralph/가 없을 때
+1. **프로젝트 내** (우선): `.flowset/notes.md` — `.flowset/` 디렉토리가 있으면 여기에 기록
+2. **프로젝트 외** (fallback): `~/.claude/projects/{project-encoded}/notes.md` — git 미연결이거나 .flowset/가 없을 때
 
 조회 시 두 곳 모두 확인하되, 프로젝트 로컬 파일을 먼저 표시합니다.
 **git이 없어도 동작합니다.**

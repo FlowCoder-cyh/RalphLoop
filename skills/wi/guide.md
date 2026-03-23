@@ -1,6 +1,6 @@
 ---
 name: guide
-description: "PRD 작성 가이드 출력 - Ralph Loop에서 자동 처리 가능한 PRD 형식 안내"
+description: "PRD 작성 가이드 출력 - FlowSet에서 자동 처리 가능한 PRD 형식 안내"
 category: utility
 complexity: basic
 mcp-servers: []
@@ -9,7 +9,7 @@ personas: []
 
 # /wi:guide - PRD 작성 가이드
 
-> Ralph Loop이 자동 처리할 수 있는 PRD 형식을 안내합니다.
+> FlowSet이 자동 처리할 수 있는 PRD 형식을 안내합니다.
 
 ## Triggers
 - PRD 작성 방법 문의
@@ -26,9 +26,9 @@ personas: []
 
 ---
 
-# PRD 작성 가이드 (Ralph Loop 호환)
+# PRD 작성 가이드 (FlowSet 호환)
 
-이 형식을 따르면 `/wi:start`가 자동으로 WI 체크리스트를 생성하고 Ralph Loop을 가동합니다.
+이 형식을 따르면 `/wi:start`가 자동으로 WI 체크리스트를 생성하고 FlowSet을 가동합니다.
 
 ## 필수 섹션
 

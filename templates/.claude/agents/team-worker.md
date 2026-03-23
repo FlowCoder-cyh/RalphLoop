@@ -16,10 +16,10 @@ disallowedTools: Agent
 - `.claude/agents/team-roles.md` 읽기 → 내 역할과 책임 확인
 
 ### 2. 맥락 로드
-- `.ralph/requirements.md` 읽기 (요구사항 SSOT)
-- `.ralph/contracts/api-standard.md` 읽기 (API 계약)
-- `.ralph/contracts/data-flow.md` 읽기 (데이터 흐름)
-- `.ralph/guardrails.md` 읽기 (알려진 제약)
+- `.flowset/requirements.md` 읽기 (요구사항 SSOT)
+- `.flowset/contracts/api-standard.md` 읽기 (API 계약)
+- `.flowset/contracts/data-flow.md` 읽기 (데이터 흐름)
+- `.flowset/guardrails.md` 읽기 (알려진 제약)
 - 내 소유 디렉토리 코드 읽기 (기존 구현 파악)
 
 ### 3. 작업 수행

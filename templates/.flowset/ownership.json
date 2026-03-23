@@ -3,7 +3,7 @@
     "frontend": ["src/app/**", "src/components/**"],
     "backend": ["src/api/**", "src/lib/**"],
     "qa": ["e2e/**", "tests/**"],
-    "devops": [".github/**", ".claude/**", ".ralph/**"],
+    "devops": [".github/**", ".claude/**", ".flowset/**"],
     "planning": ["docs/**", "wireframes/**"]
   },
   "shared": [
@@ -15,10 +15,10 @@
     "prisma/schema.prisma"
   ],
   "crossTeamReview": {
-    ".ralph/contracts/api-standard.md": ["frontend", "backend"],
-    ".ralph/contracts/data-flow.md": ["frontend", "backend", "qa"],
+    ".flowset/contracts/api-standard.md": ["frontend", "backend"],
+    ".flowset/contracts/data-flow.md": ["frontend", "backend", "qa"],
     "prisma/schema.prisma": ["frontend", "backend"],
-    ".ralph/requirements.md": ["all"],
+    ".flowset/requirements.md": ["all"],
     "src/components/shared/**": ["frontend", "backend"],
     "src/components/common/**": ["frontend", "backend"],
     "src/lib/shared/**": ["frontend", "backend"],

@@ -1,6 +1,6 @@
 # Guardrails (Project-Specific)
 
-Ralph Loop 실행 중 발견된 프로젝트별 실패 패턴과 금지 규칙을 기록합니다.
+FlowSet 실행 중 발견된 프로젝트별 실패 패턴과 금지 규칙을 기록합니다.
 에이전트가 자동으로 이 파일에 추가합니다.
 
 **글로벌 규칙은 `.claude/rules/wi-*.md`에 있으며 이 파일보다 우선합니다.**

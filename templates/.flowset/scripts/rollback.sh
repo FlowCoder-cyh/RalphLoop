@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # rollback.sh — 코드/DB 롤백 유틸리티
-# 사용법: bash .ralph/scripts/rollback.sh [code|db|deploy] [options]
+# 사용법: bash .flowset/scripts/rollback.sh [code|db|deploy] [options]
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ log() {
 rollback_code() {
   local commit="${1:-}"
   if [[ -z "$commit" ]]; then
-    echo "사용법: bash .ralph/scripts/rollback.sh code <commit-hash>"
+    echo "사용법: bash .flowset/scripts/rollback.sh code <commit-hash>"
     echo ""
     echo "최근 머지 커밋:"
     git log --oneline --merges -5 main 2>/dev/null
@@ -55,10 +55,10 @@ rollback_code() {
 
   log "PR 생성: $pr_url"
 
-  if [[ -f ".ralph/scripts/enqueue-pr.sh" ]]; then
+  if [[ -f ".flowset/scripts/enqueue-pr.sh" ]]; then
     local pr_number
     pr_number=$(gh pr view --json number --jq '.number' 2>/dev/null)
-    bash .ralph/scripts/enqueue-pr.sh "$pr_number" --wait
+    bash .flowset/scripts/enqueue-pr.sh "$pr_number" --wait
   fi
 
   log "코드 롤백 완료"
@@ -68,7 +68,7 @@ rollback_code() {
 rollback_db() {
   local migration="${1:-}"
   if [[ -z "$migration" ]]; then
-    echo "사용법: bash .ralph/scripts/rollback.sh db <migration-name>"
+    echo "사용법: bash .flowset/scripts/rollback.sh db <migration-name>"
     echo ""
     echo "적용된 마이그레이션:"
     npx prisma migrate status 2>/dev/null || echo "prisma 미설치"
@@ -119,12 +119,12 @@ case "$ACTION" in
     rollback_deploy "$@"
     ;;
   help|*)
-    echo "Ralph Loop 롤백 유틸리티"
+    echo "FlowSet 롤백 유틸리티"
     echo ""
     echo "사용법:"
-    echo "  bash .ralph/scripts/rollback.sh code <commit-hash>   # git revert → PR"
-    echo "  bash .ralph/scripts/rollback.sh db <migration-name>  # prisma migrate resolve"
-    echo "  bash .ralph/scripts/rollback.sh deploy [vercel]      # 배포 롤백"
+    echo "  bash .flowset/scripts/rollback.sh code <commit-hash>   # git revert → PR"
+    echo "  bash .flowset/scripts/rollback.sh db <migration-name>  # prisma migrate resolve"
+    echo "  bash .flowset/scripts/rollback.sh deploy [vercel]      # 배포 롤백"
     echo ""
     echo "규칙:"
     echo "  - 롤백도 정상 PR 프로세스를 따름 (hotfix 제외)"

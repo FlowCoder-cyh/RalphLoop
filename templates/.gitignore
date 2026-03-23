@@ -35,13 +35,13 @@ out/
 Thumbs.db
 desktop.ini
 
-# Ralph Loop logs (local only)
-.ralph/logs/
-.ralph/.claude_session_id
-.ralph/completed_wis.txt
-.ralph/loop_state.json
+# FlowSet logs (local only)
+.flowset/logs/
+.flowset/.claude_session_id
+.flowset/completed_wis.txt
+.flowset/loop_state.json
 
-# Parallel worktree (ralph.sh 자동 생성/정리)
+# Parallel worktree (flowset.sh 자동 생성/정리)
 .worktrees/
 
 # Test coverage

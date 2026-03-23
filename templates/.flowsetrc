@@ -1,4 +1,4 @@
-# Ralph Loop Configuration
+# FlowSet Configuration
 # 프로젝트별 설정 파일
 
 # 프로젝트 정보
@@ -16,8 +16,8 @@ NO_PROGRESS_LIMIT=3
 MAX_TURNS=40              # 워커당 최대 턴 수 (탐색 과잉 방지, 0=무제한)
 
 # 파일 경로
-PROMPT_FILE=".ralph/PROMPT.md"
-FIX_PLAN=".ralph/fix_plan.md"
+PROMPT_FILE=".flowset/PROMPT.md"
+FIX_PLAN=".flowset/fix_plan.md"
 
 # 병렬 실행 (1 = 순차, 2+ = 병렬 worktree)
 # 병렬 시 같은 batch 내 WI만 동시 처리 (fix_plan.md batch 태그 기반)

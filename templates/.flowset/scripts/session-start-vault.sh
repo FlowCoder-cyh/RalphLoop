@@ -10,9 +10,9 @@ export LC_ALL=en_US.UTF-8
 INPUT=$(cat 2>/dev/null || true)
 SOURCE=$(echo "$INPUT" | jq -r '.source // "startup"' 2>/dev/null || echo "startup")
 
-# .ralphrc 로드
-if [[ -f ".ralphrc" ]]; then
-  source .ralphrc 2>/dev/null || true
+# .flowsetrc 로드
+if [[ -f ".flowsetrc" ]]; then
+  source .flowsetrc 2>/dev/null || true
 fi
 
 # vault 미활성화 시 종료

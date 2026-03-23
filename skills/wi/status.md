@@ -31,11 +31,11 @@ personas: []
 ```
 읽기 대상:
 1. CLAUDE.md              → 프로젝트 정보 (이름, 타입, 규칙)
-2. .ralph/fix_plan.md     → WI 진행 상태 (완료/미완료 수)
-3. .ralph/guardrails.md   → 누적된 실패 방지 규칙
-4. .ralph/notes.md        → 수동 메모 (있으면)
-5. .ralph/prd-state.json  → PRD 작성 진행 상태 (있으면)
-6. .ralph/logs/ralph.log  → 마지막 10줄 (Ralph Loop 실행 이력)
+2. .flowset/fix_plan.md     → WI 진행 상태 (완료/미완료 수)
+3. .flowset/guardrails.md   → 누적된 실패 방지 규칙
+4. .flowset/notes.md        → 수동 메모 (있으면)
+5. .flowset/prd-state.json  → PRD 작성 진행 상태 (있으면)
+6. .flowset/logs/flowset.log  → 마지막 10줄 (FlowSet 실행 이력)
 7. PRD.md                 → PRD 확정 여부
 8. git log --oneline -10  → 최근 커밋 이력
 9. gh pr list             → 열린 PR 목록
@@ -50,7 +50,7 @@ CLAUDE.md 없음          → "환경 미셋업. /wi:init 실행 필요"
 CLAUDE.md 있고 PRD 없음 → "환경 셋업 완료. /wi:prd 로 PRD 생성 필요"
 prd-state.json 있음     → "PRD 작성 중 (진행률 표시)"
 PRD.md 있고 fix_plan 비어있음 → "PRD 확정됨. /wi:start 실행 필요"
-fix_plan에 [ ] 있음     → "Ralph Loop 진행 중 (N/M 완료)"
+fix_plan에 [ ] 있음     → "FlowSet 진행 중 (N/M 완료)"
 fix_plan 전부 [x]       → "전체 완료"
 ```
 
@@ -61,7 +61,7 @@ fix_plan 전부 [x]       → "전체 완료"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📋 단계: {현재 단계}
-   환경 셋업 [✅] → PRD 작성 [✅] → WI 생성 [✅] → Ralph Loop [🔄] → 완료 [ ]
+   환경 셋업 [✅] → PRD 작성 [✅] → WI 생성 [✅] → FlowSet [🔄] → 완료 [ ]
 
 📊 진행률: {완료}/{전체} WI ({퍼센트}%)
    - feat: {N}개 완료 / {M}개
@@ -100,5 +100,5 @@ fix_plan 전부 [x]       → "전체 완료"
 
 **Will Not:**
 - 파일 수정 (읽기 전용)
-- Ralph Loop 실행 (그건 /wi:start)
+- FlowSet 실행 (그건 /wi:start)
 - 상태 추측 (파일에 없는 정보는 "알 수 없음" 표시)

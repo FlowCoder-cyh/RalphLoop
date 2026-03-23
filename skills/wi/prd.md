@@ -1,6 +1,6 @@
 ---
 name: prd
-description: "대화형 PRD 생성 - 사용자와 대화하며 Ralph Loop 호환 PRD를 자동 작성"
+description: "대화형 PRD 생성 - 사용자와 대화하며 FlowSet 호환 PRD를 자동 작성"
 category: workflow
 complexity: advanced
 mcp-servers: []
@@ -9,7 +9,7 @@ personas: [architect]
 
 # /wi:prd - Interactive PRD Builder
 
-> 사용자와 대화하며 프로젝트 요구사항을 추출하고, Ralph Loop이 바로 소화할 수 있는 PRD.md를 생성합니다.
+> 사용자와 대화하며 프로젝트 요구사항을 추출하고, FlowSet이 바로 소화할 수 있는 PRD.md를 생성합니다.
 
 ## Triggers
 - PRD 작성 요청
@@ -30,14 +30,14 @@ personas: [architect]
 - 사용자가 말한 내용에서 **최대한 유추** — 이미 파악된 건 다시 묻지 않음
 - 애매한 건 **선택지를 제시**하여 골라받음
 - 충분한 정보가 모이면 **즉시 PRD 초안 생성** → 피드백 받기
-- **매 스텝 완료 시 `.ralph/prd-state.json`에 상태 자동 저장** (세션 중단 대비, 세션 메모리가 아닌 프로젝트 상태 파일)
+- **매 스텝 완료 시 `.flowset/prd-state.json`에 상태 자동 저장** (세션 중단 대비, 세션 메모리가 아닌 프로젝트 상태 파일)
 - **모든 결정에 WHY를 기록** — `decisions[]`에 선택/기각/근거를 반드시 포함
 - **사용자 원문 제약조건 보존** — `user_constraints[]`에 사용자 발언 그대로 기록
 - 오토컴팩트가 발생해도 prd-state.json에서 전체 맥락 복원 가능해야 함
 
 ### Step 0: 이전 상태 복원 (세션 재개 시)
 
-`.ralph/prd-state.json` 파일이 존재하면 읽어서 이전 대화 상태를 복원:
+`.flowset/prd-state.json` 파일이 존재하면 읽어서 이전 대화 상태를 복원:
 
 ```json
 {
@@ -227,7 +227,7 @@ L3까지 확정되면 각 기능별 구체적 태스크를 자동 생성.
   - 예: "출근 폼 UI → POST /api/attendance → 성공 시 목록 리프레시 (wireframes/attendance.html 참조)"
 - 수용 기준: 검증 가능한 1줄
   - 예: "수용 기준: POST 호출 시 DB에 레코드 생성 + 에러 시 400 반환"
-- `/wi:start`에서 .ralph/contracts/data-flow.md가 있으면 SSOT 엔드포인트 자동 참조
+- `/wi:start`에서 .flowset/contracts/data-flow.md가 있으면 SSOT 엔드포인트 자동 참조
 
 ### Step 5: PRD 초안 생성 & 피드백
 
@@ -267,13 +267,13 @@ Write docs/L3-feature/{name}.md (각 소분류별)
 
 **사용자 원본 요구사항 고정 (에이전트 수정 금지):**
 ```bash
-# .ralph/requirements.md 생성
+# .flowset/requirements.md 생성
 # prd-state.json의 user_constraints[] + decisions[]에서 추출
 # 이 파일은 사용자 원본이며, 에이전트가 절대 수정하지 않음
 # 매 커밋 시 이 파일 기준으로 구현 누락 여부 검증됨
 ```
 
-`.ralph/requirements.md` 형식:
+`.flowset/requirements.md` 형식:
 ```markdown
 # 사용자 원본 요구사항 (수정 금지)
 # 이 파일은 /wi:prd 확정 시 자동 생성됩니다.
@@ -299,9 +299,9 @@ PRD가 확정되었습니다.
 
 📄 PRD.md 저장 완료
 📁 docs/ 계층 문서 생성 완료
-🔒 .ralph/requirements.md 생성 (사용자 원본 — 수정 금지)
+🔒 .flowset/requirements.md 생성 (사용자 원본 — 수정 금지)
 
-다음 단계: /wi:start 로 Ralph Loop을 시작하세요.
+다음 단계: /wi:start 로 FlowSet을 시작하세요.
 ```
 
 ## PRD 출력 형식
@@ -388,4 +388,4 @@ Claude: 확인했습니다. 각 영역을 좀 더 구체화하면:
 **Will Not:**
 - 사용자 확인 없이 PRD 확정
 - 기술적으로 불가능한 요구사항 무비판 수용 (대안 제시)
-- 코드 구현 (Ralph Loop이 담당)
+- 코드 구현 (FlowSet이 담당)

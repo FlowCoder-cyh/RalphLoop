@@ -1,6 +1,6 @@
-# WI System - Ralph Loop Rules
+# WI System - FlowSet Rules
 
-Ralph Loop 실행 중 Claude가 반드시 따라야 하는 규칙입니다.
+FlowSet 실행 중 Claude가 반드시 따라야 하는 규칙입니다.
 이 규칙은 `.claude/rules/`에 있으므로 컨텍스트 압축과 무관하게 항상 적용됩니다.
 
 ## 1. 반복 규칙
@@ -15,21 +15,21 @@ Ralph Loop 실행 중 Claude가 반드시 따라야 하는 규칙입니다.
 - 검증 실패 시 최대 3회 재시도, 3회 실패 시 guardrails.md에 기록 후 다음 WI
 
 ## 3. 가드레일
-- `.ralph/guardrails.md`의 규칙을 절대 위반하지 않음
+- `.flowset/guardrails.md`의 규칙을 절대 위반하지 않음
 - 새로운 실패 패턴 발견 시 guardrails.md에 즉시 추가
-- `.ralph/` 디렉토리의 파일을 절대 삭제하지 않음
+- `.flowset/` 디렉토리의 파일을 절대 삭제하지 않음
 
 ## 4. 상태 출력 형식
 매 반복 종료 시 반드시 출력:
 ```
----RALPH_STATUS---
+---FLOWSET_STATUS---
 STATUS: IN_PROGRESS | COMPLETE
 TASKS_COMPLETED_THIS_LOOP: {수}
 FILES_MODIFIED: {수}
 TESTS_STATUS: PASSING | FAILING | NOT_RUN
 EXIT_SIGNAL: false | true
 SUMMARY: {한 줄 요약}
----END_RALPH_STATUS---
+---END_FLOWSET_STATUS---
 ```
 
 ## 5. Git 작업

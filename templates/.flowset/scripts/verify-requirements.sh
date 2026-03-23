@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 검증 에이전트: requirements.md vs 구현 대조 + 계약 준수 (v3.0)
-# Stop hook 또는 ralph.sh에서 자동 호출
+# Stop hook 또는 flowset.sh에서 자동 호출
 # 구현 에이전트와 분리 — Read/Grep/Glob만 허용
 
 set -euo pipefail
@@ -9,21 +9,21 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
 # requirements.md 없으면 스킵
-[[ -f ".ralph/requirements.md" ]] || exit 0
+[[ -f ".flowset/requirements.md" ]] || exit 0
 
 # 소스 파일 변경 확인 (변경 없으면 스킵)
 CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --cached --name-only 2>/dev/null || true)
 SRC_CHANGED=$(echo "$CHANGED" | grep -cE '\.(ts|tsx|js|jsx|py|go|rs)$' 2>/dev/null || echo "0")
 [[ "$SRC_CHANGED" -lt 1 ]] && exit 0
 
-RESULT_FILE=".ralph/verify-result.md"
+RESULT_FILE=".flowset/verify-result.md"
 
 # 검증 에이전트 실행 (Read/Grep/Glob만 허용 — 코드 수정 불가)
 env -u CLAUDECODE claude -p "$(cat <<'VERIFY_PROMPT'
 당신은 검증 전용 에이전트입니다. 코드를 수정하지 않고, 요구사항 대비 구현 누락만 판정합니다.
 
 ## 절차
-1. `.ralph/requirements.md` 읽기 (사용자 원본 요구사항)
+1. `.flowset/requirements.md` 읽기 (사용자 원본 요구사항)
 2. `git diff --stat HEAD~1 HEAD` 으로 변경된 파일 확인
 3. 변경된 소스 파일 읽기 (최대 10개)
 4. requirements.md의 각 항목에 대해 판정:
@@ -66,8 +66,8 @@ if [[ -f "$RESULT_FILE" ]]; then
     echo ""
 
     # v3.0: vault에 검증 결과 기록
-    if [[ -f ".ralphrc" ]]; then
-      source .ralphrc 2>/dev/null || true
+    if [[ -f ".flowsetrc" ]]; then
+      source .flowsetrc 2>/dev/null || true
       if [[ "${VAULT_ENABLED:-false}" == "true" && -n "${VAULT_API_KEY:-}" ]]; then
         local_result=$(cat "$RESULT_FILE" 2>/dev/null | head -50)
         curl -s -k --max-time 3 \

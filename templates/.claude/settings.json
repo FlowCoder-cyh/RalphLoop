@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .ralph/scripts/session-start-vault.sh",
+            "command": "bash .flowset/scripts/session-start-vault.sh",
             "timeout": 10
           }
         ]
@@ -17,12 +17,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .ralph/scripts/check-ownership.sh",
+            "command": "bash .flowset/scripts/check-ownership.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash .ralph/scripts/check-cross-team-impact.sh",
+            "command": "bash .flowset/scripts/check-cross-team-impact.sh",
             "timeout": 10
           }
         ]
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .ralph/scripts/notify-contract-change.sh",
+            "command": "bash .flowset/scripts/notify-contract-change.sh",
             "timeout": 10
           }
         ]
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .ralph/scripts/stop-rag-check.sh",
+            "command": "bash .flowset/scripts/stop-rag-check.sh",
             "timeout": 120
           }
         ]

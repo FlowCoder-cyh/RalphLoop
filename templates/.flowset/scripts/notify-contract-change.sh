@@ -25,7 +25,7 @@ file_path=$(echo "$file_path" | sed 's|\\|/|g')
 
 # contracts/ 파일이 아니면 무동작
 case "$file_path" in
-  .ralph/contracts/*|contracts/*)
+  .flowset/contracts/*|contracts/*)
     ;;
   *)
     exit 0

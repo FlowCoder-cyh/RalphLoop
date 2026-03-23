@@ -33,13 +33,13 @@
 ## 5. 상태 관리
 - 모든 상태는 파일 기반으로 관리 (mem:* 사용하지 않음)
 - 프로젝트 상태 확인: `/wi:status`
-- 상태 파일 위치: `.ralph/` 디렉토리
-- 세션 간 상태 복원: `.ralph/prd-state.json`, `.ralph/fix_plan.md`, git history
+- 상태 파일 위치: `.flowset/` 디렉토리
+- 세션 간 상태 복원: `.flowset/prd-state.json`, `.flowset/fix_plan.md`, git history
 
 ## 6. 워크플로우
 - `/wi:init` → 환경 셋업
 - `/wi:prd` → PRD 생성 (대화형)
-- `/wi:start` → MCP 탐색·설치 + Ralph Loop 가동
+- `/wi:start` → MCP 탐색·설치 + FlowSet 가동
 - `/wi:status` → 상태 확인
 - `/wi:note` → 결정사항 즉시 기록
 - `/wi:guide` → PRD 작성 가이드
@@ -48,7 +48,7 @@
 ```
 1순위: .claude/rules/wi-*.md (이 파일들)
 2순위: {project}/.claude/rules/project.md
-3순위: .ralph/guardrails.md (프로젝트별 누적 규칙)
+3순위: .flowset/guardrails.md (프로젝트별 누적 규칙)
 4순위: CLAUDE.md (프로젝트 정보 참조)
 ```
 상위 규칙과 하위 규칙이 충돌하면 **상위를 따른다**.

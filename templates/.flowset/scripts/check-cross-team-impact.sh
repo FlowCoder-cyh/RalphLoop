@@ -29,7 +29,7 @@ fi
 file_path=$(echo "$file_path" | sed 's|\\|/|g')
 
 # --- requirements.md 완전 차단 (모든 팀, 예외 없음) ---
-if [[ "$file_path" == ".ralph/requirements.md" ]]; then
+if [[ "$file_path" == ".flowset/requirements.md" ]]; then
   jq -n \
     --arg team "$TEAM_NAME" \
     '{
@@ -43,7 +43,7 @@ if [[ "$file_path" == ".ralph/requirements.md" ]]; then
 fi
 
 # --- ownership.json crossTeamReview 동적 매칭 ---
-OWNERSHIP_FILE=".ralph/ownership.json"
+OWNERSHIP_FILE=".flowset/ownership.json"
 if [[ ! -f "$OWNERSHIP_FILE" ]]; then
   exit 0
 fi

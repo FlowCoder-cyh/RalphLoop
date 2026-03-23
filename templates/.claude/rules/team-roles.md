@@ -9,7 +9,7 @@
 | frontend | 프론트엔드 | src/app/**, src/components/** | UI/UX 구현, 페이지, 컴포넌트 |
 | backend | 백엔드 | src/api/**, src/lib/** | API, DB 연동, 비즈니스 로직 |
 | qa | QA | e2e/**, tests/** | E2E 테스트, 통합 테스트, 단위 테스트 |
-| devops | DevOps | .github/**, .claude/**, .ralph/** | CI/CD, 인프라, 배포, 설정 |
+| devops | DevOps | .github/**, .claude/**, .flowset/** | CI/CD, 인프라, 배포, 설정 |
 | planning | 기획 | docs/**, wireframes/** | PRD, 와이어프레임, 요구사항 정리 |
 
 ## 공유 파일 (전팀 수정 가능)
@@ -19,7 +19,7 @@
 - `CLAUDE.md`
 - `prisma/schema.prisma`
 
-상세 매핑은 `.ralph/ownership.json` 참조.
+상세 매핑은 `.flowset/ownership.json` 참조.
 
 ## 팀별 검증 책임
 
@@ -32,10 +32,10 @@
 | planning | 요구사항 완전성, 와이어프레임 정합성 |
 
 ## 팀 간 소통
-- 프론트 ↔ 백엔드: `.ralph/contracts/api-standard.md`
-- 프론트 ↔ 기획: `wireframes/`, `.ralph/requirements.md`
+- 프론트 ↔ 백엔드: `.flowset/contracts/api-standard.md`
+- 프론트 ↔ 기획: `wireframes/`, `.flowset/requirements.md`
 - 백엔드 ↔ DevOps: `prisma/schema.prisma`, `.env.example`
-- 전체: `.ralph/guardrails.md` (공유 제약)
+- 전체: `.flowset/guardrails.md` (공유 제약)
 
 ## 동적 확장
 프로젝트에 따라 역할 추가 가능:

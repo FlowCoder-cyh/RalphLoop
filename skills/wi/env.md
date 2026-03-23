@@ -288,5 +288,5 @@ GOOGLE_CLIENT_SECRET=
 - 사용자 확인 없이 유료 서비스 가입
 - .env 파일을 git에 커밋
 - 프로덕션 환경 직접 수정 (프리뷰만)
-- 코드 구현 (그건 Ralph Loop이 담당)
+- 코드 구현 (그건 FlowSet이 담당)
 - PRD 내용 임의 수정

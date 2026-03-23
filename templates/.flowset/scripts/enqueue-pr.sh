@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # PR을 merge queue에 등록하는 래퍼 스크립트
-# 사용법: bash .ralph/scripts/enqueue-pr.sh <PR번호> [--wait] [--timeout 분]
+# 사용법: bash .flowset/scripts/enqueue-pr.sh <PR번호> [--wait] [--timeout 분]
 # merge queue 미지원 시 gh pr merge --auto --squash fallback
 # --wait: 머지 완료까지 대기 (exit 0=머지, 1=실패/닫힘, 2=timeout)
 
 set -euo pipefail
 
-PR_NUMBER="${1:?PR 번호를 입력하세요. 예: bash .ralph/scripts/enqueue-pr.sh 79}"
+PR_NUMBER="${1:?PR 번호를 입력하세요. 예: bash .flowset/scripts/enqueue-pr.sh 79}"
 shift || true
 
 # 옵션 파싱

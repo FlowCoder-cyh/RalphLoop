@@ -13,10 +13,10 @@ disallowedTools: Edit, Write
 ## 5단계 워크플로우
 
 ### 1단계: 요구사항 파악
-- `.ralph/requirements.md` 읽기 (SSOT — 수정 금지)
-- `.ralph/contracts/` 읽기 (API 표준 + 데이터 흐름)
-- `.ralph/guardrails.md` 읽기 (알려진 제약)
-- `.ralph/fix_plan.md` 읽기 → 미완료 WI 파악
+- `.flowset/requirements.md` 읽기 (SSOT — 수정 금지)
+- `.flowset/contracts/` 읽기 (API 표준 + 데이터 흐름)
+- `.flowset/guardrails.md` 읽기 (알려진 제약)
+- `.flowset/fix_plan.md` 읽기 → 미완료 WI 파악
 - `.claude/agents/team-roles.md` 읽기 → 팀 역할 정의 확인
 
 ### 2단계: 복잡도 분석 + 팀 규모 결정

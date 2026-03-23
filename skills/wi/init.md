@@ -1,6 +1,6 @@
 ---
 name: init
-description: "프로젝트 개발 환경 전체 셋업 (Git, CI/CD, Ralph Loop, 문서 계층구조)"
+description: "프로젝트 개발 환경 전체 셋업 (Git, CI/CD, FlowSet, 문서 계층구조)"
 category: workflow
 complexity: advanced
 mcp-servers: []
@@ -9,7 +9,7 @@ personas: [devops-engineer, architect]
 
 # /wi:init - Project Environment Setup
 
-> 새 프로젝트에 Git, GitHub CI/CD, PR 규칙, Ralph Loop, 문서 계층구조를 한번에 셋업합니다.
+> 새 프로젝트에 Git, GitHub CI/CD, PR 규칙, FlowSet, 문서 계층구조를 한번에 셋업합니다.
 
 ## Triggers
 - 새 프로젝트 초기 환경 구성
@@ -35,7 +35,7 @@ git checkout -b main
 ```
 
 ### Step 3: 프로젝트 구조 생성
-**1단계: `~/.claude/templates/ralph/`에서 템플릿 복사** (ralph.sh, PROMPT.md, hooks, workflows, .gitignore 등)
+**1단계: `~/.claude/templates/flowset/`에서 템플릿 복사** (flowset.sh, PROMPT.md, hooks, workflows, .gitignore 등)
 **2단계: 아래 중 템플릿에 없는 파일만 직접 생성** (.claude/rules/, docs/, fix_plan.md, guardrails.md, AGENT.md)
 
 최종 구조:
@@ -48,8 +48,8 @@ git checkout -b main
 .claude/
   rules/
     project.md          # 프로젝트 규칙 (글로벌 규칙 상속)
-.ralph/
-  PROMPT.md             # Ralph Loop 반복 프롬프트 (절차만, 규칙은 rules/ 참조)
+.flowset/
+  PROMPT.md             # FlowSet 반복 프롬프트 (절차만, 규칙은 rules/ 참조)
   AGENT.md              # 빌드/테스트 명령 (프로젝트 타입에 맞게)
   fix_plan.md           # WI 체크리스트 (PRD 투입 시 채워짐)
   guardrails.md         # 프로젝트별 실패 방지 규칙
@@ -64,8 +64,8 @@ docs/
   L2-module/            # 중분류 (기능 모듈)
   L3-feature/           # 소분류 (개별 기능)
   L4-task/              # 상세분류 (WI 단위)
-ralph.sh                # Ralph Loop 스크립트
-.ralphrc                # Ralph 설정
+flowset.sh                # FlowSet 스크립트
+.flowsetrc                # Ralph 설정
 .gitattributes          # UTF-8 + LF 강제
 .editorconfig           # 에디터 설정
 CLAUDE.md               # 프로젝트 정보 (규칙은 rules/ 참조)
@@ -84,35 +84,35 @@ CLAUDE.md               # 프로젝트 정보 (규칙은 rules/ 참조)
 #### AGENT.md (프로젝트 타입별)
 프로젝트 타입에 맞는 lint/build/test 명령 기입.
 
-#### ralph.sh, PROMPT.md, hooks, workflows 등 (템플릿에서 복사)
-**직접 생성하지 않음.** `~/.claude/templates/ralph/`에서 복사합니다.
+#### flowset.sh, PROMPT.md, hooks, workflows 등 (템플릿에서 복사)
+**직접 생성하지 않음.** `~/.claude/templates/flowset/`에서 복사합니다.
 
 ```bash
 # 템플릿 디렉토리 확인
-TEMPLATE_DIR="$HOME/.claude/templates/ralph"
+TEMPLATE_DIR="$HOME/.claude/templates/flowset"
 if [[ ! -d "$TEMPLATE_DIR" ]]; then
   echo "ERROR: 템플릿이 설치되지 않았습니다."
   echo "  settings 저장소에서 설치하세요:"
-  echo "  git clone https://github.com/FlowCoder-cyh/RalphLoop.git /tmp/ralph-templates"
-  echo "  cp -r /tmp/ralph-templates/templates/ ~/.claude/templates/ralph/"
+  echo "  git clone https://github.com/FlowCoder-cyh/FlowSet.git /tmp/flowset-templates"
+  echo "  cp -r /tmp/flowset-templates/templates/ ~/.claude/templates/flowset/"
   exit 1
 fi
 
 # 템플릿 복사 (중첩 방지: 개별 파일 단위)
-cp "$TEMPLATE_DIR/ralph.sh" ./ralph.sh
+cp "$TEMPLATE_DIR/flowset.sh" ./flowset.sh
 cp "$TEMPLATE_DIR/.gitignore" ./.gitignore
 cp "$TEMPLATE_DIR/.gitattributes" ./.gitattributes
 cp "$TEMPLATE_DIR/.editorconfig" ./.editorconfig
 cp "$TEMPLATE_DIR/CLAUDE.md" ./CLAUDE.md
 
-# .ralph/ 내부 파일 복사 (디렉토리는 이미 Step 3에서 생성됨)
-cp "$TEMPLATE_DIR/.ralph/PROMPT.md" ./.ralph/PROMPT.md
-cp "$TEMPLATE_DIR/.ralph/hooks/commit-msg" ./.ralph/hooks/commit-msg
-cp "$TEMPLATE_DIR/.ralph/hooks/pre-push" ./.ralph/hooks/pre-push
-mkdir -p ./.ralph/scripts
-cp "$TEMPLATE_DIR/.ralph/scripts/enqueue-pr.sh" ./.ralph/scripts/enqueue-pr.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/launch-loop.sh" ./.ralph/scripts/launch-loop.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/verify-requirements.sh" ./.ralph/scripts/verify-requirements.sh
+# .flowset/ 내부 파일 복사 (디렉토리는 이미 Step 3에서 생성됨)
+cp "$TEMPLATE_DIR/.flowset/PROMPT.md" ./.flowset/PROMPT.md
+cp "$TEMPLATE_DIR/.flowset/hooks/commit-msg" ./.flowset/hooks/commit-msg
+cp "$TEMPLATE_DIR/.flowset/hooks/pre-push" ./.flowset/hooks/pre-push
+mkdir -p ./.flowset/scripts
+cp "$TEMPLATE_DIR/.flowset/scripts/enqueue-pr.sh" ./.flowset/scripts/enqueue-pr.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/launch-loop.sh" ./.flowset/scripts/launch-loop.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/verify-requirements.sh" ./.flowset/scripts/verify-requirements.sh
 
 # .github/ 내부 파일 복사
 mkdir -p ./.github/workflows
@@ -123,7 +123,7 @@ cp "$TEMPLATE_DIR/.github/workflows/e2e.yml" ./.github/workflows/e2e.yml
 
 # .claude/rules/ 운영 규칙 복사
 mkdir -p ./.claude/rules
-cp "$TEMPLATE_DIR/.claude/rules/ralph-operations.md" ./.claude/rules/ralph-operations.md
+cp "$TEMPLATE_DIR/.claude/rules/flowset-operations.md" ./.claude/rules/flowset-operations.md
 cp "$TEMPLATE_DIR/.claude/rules/project.md" ./.claude/rules/project.md
 cp "$TEMPLATE_DIR/.claude/rules/team-roles.md" ./.claude/rules/team-roles.md 2>/dev/null || true
 
@@ -131,20 +131,20 @@ cp "$TEMPLATE_DIR/.claude/rules/team-roles.md" ./.claude/rules/team-roles.md 2>/
 cp "$TEMPLATE_DIR/.claude/settings.json" ./.claude/settings.json
 
 # Stop hook 스크립트
-cp "$TEMPLATE_DIR/.ralph/scripts/stop-rag-check.sh" ./.ralph/scripts/stop-rag-check.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/session-start-vault.sh" ./.ralph/scripts/session-start-vault.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/notify-contract-change.sh" ./.ralph/scripts/notify-contract-change.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/check-cross-team-impact.sh" ./.ralph/scripts/check-cross-team-impact.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/rollback.sh" ./.ralph/scripts/rollback.sh
-cp "$TEMPLATE_DIR/.ralph/tech-debt.md" ./.ralph/tech-debt.md 2>/dev/null || true
+cp "$TEMPLATE_DIR/.flowset/scripts/stop-rag-check.sh" ./.flowset/scripts/stop-rag-check.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/session-start-vault.sh" ./.flowset/scripts/session-start-vault.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/notify-contract-change.sh" ./.flowset/scripts/notify-contract-change.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/check-cross-team-impact.sh" ./.flowset/scripts/check-cross-team-impact.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/rollback.sh" ./.flowset/scripts/rollback.sh
+cp "$TEMPLATE_DIR/.flowset/tech-debt.md" ./.flowset/tech-debt.md 2>/dev/null || true
 
 # v3.0: 소유권 hook + vault helpers + 계약 템플릿
-cp "$TEMPLATE_DIR/.ralph/scripts/check-ownership.sh" ./.ralph/scripts/check-ownership.sh
-cp "$TEMPLATE_DIR/.ralph/scripts/vault-helpers.sh" ./.ralph/scripts/vault-helpers.sh
-cp "$TEMPLATE_DIR/.ralph/ownership.json" ./.ralph/ownership.json
-mkdir -p ./.ralph/contracts
-cp "$TEMPLATE_DIR/.ralph/contracts/api-standard.md" ./.ralph/contracts/api-standard.md
-cp "$TEMPLATE_DIR/.ralph/contracts/data-flow.md" ./.ralph/contracts/data-flow.md
+cp "$TEMPLATE_DIR/.flowset/scripts/check-ownership.sh" ./.flowset/scripts/check-ownership.sh
+cp "$TEMPLATE_DIR/.flowset/scripts/vault-helpers.sh" ./.flowset/scripts/vault-helpers.sh
+cp "$TEMPLATE_DIR/.flowset/ownership.json" ./.flowset/ownership.json
+mkdir -p ./.flowset/contracts
+cp "$TEMPLATE_DIR/.flowset/contracts/api-standard.md" ./.flowset/contracts/api-standard.md
+cp "$TEMPLATE_DIR/.flowset/contracts/data-flow.md" ./.flowset/contracts/data-flow.md
 
 # v3.0: Agent Teams 템플릿 (선택적 — AGENT_TEAMS 활성화 시 사용)
 if [[ -d "$TEMPLATE_DIR/.claude/agents" ]]; then
@@ -152,12 +152,12 @@ if [[ -d "$TEMPLATE_DIR/.claude/agents" ]]; then
   cp "$TEMPLATE_DIR/.claude/agents/"*.md ./.claude/agents/ 2>/dev/null || true
 fi
 
-chmod +x ralph.sh .ralph/hooks/* .ralph/scripts/*.sh 2>/dev/null || true
+chmod +x flowset.sh .flowset/hooks/* .flowset/scripts/*.sh 2>/dev/null || true
 ```
 
 **복사 후 프로젝트별 커스터마이징만 수행:**
 
-#### .ralphrc
+#### .flowsetrc
 `PROJECT_NAME`, `PROJECT_TYPE` 필드를 인자 값으로 채움.
 
 #### CLAUDE.md
@@ -169,11 +169,11 @@ chmod +x ralph.sh .ralph/hooks/* .ralph/scripts/*.sh 2>/dev/null || true
 ### Step 4: Git Hooks 설치
 ```bash
 # commit-msg hook (커밋 메시지 형식 강제)
-cp .ralph/hooks/commit-msg .git/hooks/commit-msg
+cp .flowset/hooks/commit-msg .git/hooks/commit-msg
 chmod +x .git/hooks/commit-msg
 
 # pre-push hook (main 직접 push 방지, 초기셋업/PRD/fix_plan 예외)
-cp .ralph/hooks/pre-push .git/hooks/pre-push
+cp .flowset/hooks/pre-push .git/hooks/pre-push
 chmod +x .git/hooks/pre-push
 ```
 
@@ -184,7 +184,7 @@ chmod +x .git/hooks/pre-push
 ```
 📋 GitHub 계정 유형 선택
 
-Ralph Loop은 PR 기반 자동 머지를 사용합니다.
+FlowSet은 PR 기반 자동 머지를 사용합니다.
 계정 유형에 따라 머지 방식이 달라집니다:
 
 🏢 조직(Organization) 계정 — 권장
@@ -206,9 +206,9 @@ Ralph Loop은 PR 기반 자동 머지를 사용합니다.
 - **조직**: `gh repo create {org}/{project-name}` + (ruleset은 `/wi:start`에서 설정)
 - **개인**: `gh repo create {user}/{project-name}` + (ruleset은 `/wi:start`에서 설정)
 
-**사용자 선택을 `.ralphrc`에 기록:**
+**사용자 선택을 `.flowsetrc`에 기록:**
 ```bash
-# .ralphrc에 계정 유형 저장 (wi:start에서 ruleset 설정 시 참조)
+# .flowsetrc에 계정 유형 저장 (wi:start에서 ruleset 설정 시 참조)
 GITHUB_ACCOUNT_TYPE="org"  # 또는 "personal"
 GITHUB_ORG="{org}"         # 조직명 또는 사용자명
 ```
@@ -243,10 +243,10 @@ gh api -X PATCH "repos/{org}/{project-name}" -f allow_auto_merge=true
   .github/          → CI/CD + PR 템플릿
   .claude/rules/    → 프로젝트 규칙 (글로벌 규칙 상속)
   .claude/agents/   → Agent Teams 팀 역할 정의 (v3.0)
-  .ralph/           → Ralph Loop 설정 + Git Hooks
-  .ralph/contracts/ → 팀 간 계약 (API 표준, 데이터 흐름) (v3.0)
+  .flowset/           → FlowSet 설정 + Git Hooks
+  .flowset/contracts/ → 팀 간 계약 (API 표준, 데이터 흐름) (v3.0)
   docs/             → 문서 계층구조 (L0~L4)
-  ralph.sh          → Ralph Loop 실행 스크립트
+  flowset.sh          → FlowSet 실행 스크립트
   .gitattributes    → UTF-8 + LF 강제
   .editorconfig     → 에디터 설정
   CLAUDE.md         → 프로젝트 정보
@@ -256,7 +256,7 @@ gh api -X PATCH "repos/{org}/{project-name}" -f allow_auto_merge=true
   Git Hook (pre-push)   → main 직접 push 차단
   CI (commit-check)     → WI-NNN-[type] 형식 원격 검증
   CI (ci.yml)           → lint + build + test
-  ralph.sh              → 매 반복 후 규칙 준수 검증
+  flowset.sh              → 매 반복 후 규칙 준수 검증
 
 🔗 GitHub: https://github.com/{org}/{project-name}
 
@@ -268,10 +268,10 @@ gh api -X PATCH "repos/{org}/{project-name}" -f allow_auto_merge=true
 **Will:**
 - 프로젝트 타입에 맞는 CI/CD 워크플로우 생성
 - GitHub 레포 생성 및 브랜치 보호 설정
-- Ralph Loop 전체 환경 구성
+- FlowSet 전체 환경 구성
 - 문서 계층구조 디렉토리 생성
 
 **Will Not:**
-- 실제 비즈니스 코드 작성 (그건 Ralph Loop이 함)
+- 실제 비즈니스 코드 작성 (그건 FlowSet이 함)
 - PRD 생성 (별도로 `/wi:prd`를 사용)
 - MCP 서버 설치 (그건 /wi:start가 함)

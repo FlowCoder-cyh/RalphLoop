@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # vault-helpers.sh — Obsidian vault CRUD via Local REST API
-# ralph.sh에서 source하여 사용
+# flowset.sh에서 source하여 사용
 # VAULT_ENABLED=false이면 모든 함수가 조용히 실패 (graceful degradation)
 
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
-# 설정값 (.ralphrc에서 로드됨)
+# 설정값 (.flowsetrc에서 로드됨)
 : "${VAULT_ENABLED:=false}"
 : "${VAULT_URL:=https://localhost:27124}"
 : "${VAULT_API_KEY:=}"
@@ -144,7 +144,7 @@ vault_record() {
 # $1: 임계치 (기본 10)
 vault_check_tech_debt() {
   local threshold="${1:-10}"
-  local debt_file=".ralph/tech-debt.md"
+  local debt_file=".flowset/tech-debt.md"
 
   [[ ! -f "$debt_file" ]] && return 0
 

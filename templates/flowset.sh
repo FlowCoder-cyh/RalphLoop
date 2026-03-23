@@ -2,7 +2,7 @@
 set -euo pipefail
 
 #==============================
-# Ralph Loop - Autonomous AI Development Loop
+# FlowSet - Autonomous AI Development Loop
 # Version: 3.0.0
 #
 # v3.0.0 CHANGES:
@@ -19,7 +19,7 @@ set -euo pipefail
 #   - completed_wis.txt = Single source of truth
 #   - reconcile_fix_plan() syncs checkboxes at loop END only
 #==============================
-RALPH_VERSION="3.0.0"
+FLOWSET_VERSION="3.0.0"
 
 # UTF-8 강제 (Windows 한글 깨짐 방지)
 export LANG=en_US.UTF-8
@@ -46,18 +46,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Load config (preflight에서 존재 확인하므로 여기서는 soft fail)
-if [[ -f .ralphrc ]]; then
-  source .ralphrc
+if [[ -f .flowsetrc ]]; then
+  source .flowsetrc
 fi
 
 # Vault helpers (v3.0 — VAULT_ENABLED=false이면 모든 호출 무동작)
-if [[ -f .ralph/scripts/vault-helpers.sh ]]; then
-  source .ralph/scripts/vault-helpers.sh
+if [[ -f .flowset/scripts/vault-helpers.sh ]]; then
+  source .flowset/scripts/vault-helpers.sh
 fi
 
-# Defaults (위에서 .ralphrc가 설정하지 않은 값만 적용)
+# Defaults (위에서 .flowsetrc가 설정하지 않은 값만 적용)
 # MAX_ITERATIONS: fix_plan의 전체 WI 수 + 20% 여유 (검증 재시도 감안)
-FIX_PLAN="${FIX_PLAN:-.ralph/fix_plan.md}"
+FIX_PLAN="${FIX_PLAN:-.flowset/fix_plan.md}"
 if [[ -z "${MAX_ITERATIONS:-}" && -f "$FIX_PLAN" ]]; then
   _total_wi=$(awk '/^```/{f=!f} !f && /^\- \[[ x]\]/{c++} END{print c+0}' "$FIX_PLAN" 2>/dev/null)
   MAX_ITERATIONS=$(( _total_wi + _total_wi / 5 + 1 ))
@@ -67,8 +67,8 @@ MAX_ITERATIONS=${MAX_ITERATIONS:-50}
 RATE_LIMIT_PER_HOUR=${RATE_LIMIT_PER_HOUR:-80}
 COOLDOWN_SEC=${COOLDOWN_SEC:-5}
 ERROR_COOLDOWN_SEC=${ERROR_COOLDOWN_SEC:-30}
-PROMPT_FILE="${PROMPT_FILE:-.ralph/PROMPT.md}"
-LOG_DIR=".ralph/logs"
+PROMPT_FILE="${PROMPT_FILE:-.flowset/PROMPT.md}"
+LOG_DIR=".flowset/logs"
 ALLOWED_TOOLS="${ALLOWED_TOOLS:-Edit,Write,Read,Bash,Glob,Grep}"
 
 # 워커 토큰 제어
@@ -93,11 +93,11 @@ current_session_id=""
 total_cost_usd=0
 
 # 상태 파일 (비정상 종료 복구용)
-STATE_FILE=".ralph/loop_state.json"
+STATE_FILE=".flowset/loop_state.json"
 
 # 완료 WI 로컬 추적 (untracked — reset --hard에서 보존됨)
 # fix_plan은 READ-ONLY. 이 파일이 유일한 진실의 원천(SSOT)
-COMPLETED_FILE=".ralph/completed_wis.txt"
+COMPLETED_FILE=".flowset/completed_wis.txt"
 
 #==============================
 # Section 2: STATE MANAGEMENT
@@ -295,7 +295,7 @@ resolve_conflicting_prs() {
       if git push origin "HEAD:$branch" --force-with-lease 2>/dev/null; then
         log "  ✅ rebase 성공 — re-enqueue"
         git checkout main 2>/dev/null || true
-        bash .ralph/scripts/enqueue-pr.sh "$pr_number" 2>/dev/null || true
+        bash .flowset/scripts/enqueue-pr.sh "$pr_number" 2>/dev/null || true
       else
         log "  ⚠️ push 실패 — 스킵"
         git checkout main 2>/dev/null || true
@@ -362,9 +362,9 @@ cleanup() {
   counts=$(count_tasks)
   local completed="${counts%% *}"
   local remaining="${counts##* }"
-  log "=== Ralph Loop 종료 (${loop_count} iterations) ==="
+  log "=== FlowSet 종료 (${loop_count} iterations) ==="
   log "최종: ${completed} 완료, ${remaining} 남음"
-  log "💡 재실행: bash ralph.sh (미완료 WI부터 자동 재개)"
+  log "💡 재실행: bash flowset.sh (미완료 WI부터 자동 재개)"
 }
 
 trap cleanup EXIT
@@ -379,7 +379,7 @@ log() {
   local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
   echo "$msg"
   [[ -d "$LOG_DIR" ]] || mkdir -p "$LOG_DIR"
-  echo "$msg" >> "$LOG_DIR/ralph.log"
+  echo "$msg" >> "$LOG_DIR/flowset.log"
 }
 
 preflight() {
@@ -407,7 +407,7 @@ preflight() {
   fi
 
   # 필수 파일 확인
-  local files=("$PROMPT_FILE" "$FIX_PLAN" ".ralph/AGENT.md" ".ralphrc" ".ralph/guardrails.md")
+  local files=("$PROMPT_FILE" "$FIX_PLAN" ".flowset/AGENT.md" ".flowsetrc" ".flowset/guardrails.md")
   for f in "${files[@]}"; do
     if [[ ! -f "$f" ]]; then
       echo "ERROR: 필수 파일 없음: $f"
@@ -416,8 +416,8 @@ preflight() {
   done
 
   # Git hooks 설치 확인 (clone 후 미설치 대응)
-  if [[ -d ".ralph/hooks" ]]; then
-    for hook in .ralph/hooks/*; do
+  if [[ -d ".flowset/hooks" ]]; then
+    for hook in .flowset/hooks/*; do
       [[ -f "$hook" ]] || continue
       local hook_name
       hook_name=$(basename "$hook")
@@ -500,14 +500,14 @@ preflight() {
 
   if [[ $errors -gt 0 ]]; then
     echo ""
-    echo "$errors개 오류. Ralph Loop을 시작할 수 없습니다."
+    echo "$errors개 오류. FlowSet을 시작할 수 없습니다."
     return 1
   fi
   return 0
 }
 
 check_integrity() {
-  local files=("$PROMPT_FILE" "$FIX_PLAN" ".ralph/AGENT.md" ".ralphrc" ".ralph/guardrails.md")
+  local files=("$PROMPT_FILE" "$FIX_PLAN" ".flowset/AGENT.md" ".flowsetrc" ".flowset/guardrails.md")
   for f in "${files[@]}"; do
     if [[ ! -f "$f" ]]; then
       log "CRITICAL: Missing $f - halting"
@@ -534,8 +534,8 @@ validate_post_iteration() {
     last_commit_msg="$latest_msg"
   fi
 
-  # 2. .ralph/ 파일 삭제 여부 확인
-  for f in "$PROMPT_FILE" "$FIX_PLAN" ".ralph/AGENT.md" ".ralph/guardrails.md"; do
+  # 2. .flowset/ 파일 삭제 여부 확인
+  for f in "$PROMPT_FILE" "$FIX_PLAN" ".flowset/AGENT.md" ".flowset/guardrails.md"; do
     if [[ ! -f "$f" ]]; then
       log "VIOLATION: Ralph 파일 삭제됨 - $f"
       violations=$((violations + 1))
@@ -543,14 +543,14 @@ validate_post_iteration() {
   done
 
   # 2.5 requirements.md 수정 감지 (사용자 원본 보호)
-  if [[ -f ".ralph/requirements.md" ]]; then
+  if [[ -f ".flowset/requirements.md" ]]; then
     local req_changed
-    req_changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -F '.ralph/requirements.md' || true)
+    req_changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -F '.flowset/requirements.md' || true)
     if [[ -n "$req_changed" ]]; then
       log "VIOLATION: requirements.md 수정 감지 — 사용자 원본 수정 금지"
       violations=$((violations + 1))
       # 원본 복원
-      git checkout HEAD~1 -- .ralph/requirements.md 2>/dev/null || true
+      git checkout HEAD~1 -- .flowset/requirements.md 2>/dev/null || true
     fi
   fi
 
@@ -581,13 +581,13 @@ validate_post_iteration() {
 
       if [[ "$rag_updated" == false ]]; then
         log "RAG-CHECK: $rag_reason 감지 — RAG 미업데이트"
-        echo "### [$(date '+%Y-%m-%d %H:%M')] RAG 미업데이트: $rag_reason (Iteration #$loop_count)" >> .ralph/guardrails.md
-        echo "[RAG-UPDATE-NEEDED] $rag_reason — .claude/memory/rag/ 파일 업데이트 필요" > .ralph/rag_pending.txt
+        echo "### [$(date '+%Y-%m-%d %H:%M')] RAG 미업데이트: $rag_reason (Iteration #$loop_count)" >> .flowset/guardrails.md
+        echo "[RAG-UPDATE-NEEDED] $rag_reason — .claude/memory/rag/ 파일 업데이트 필요" > .flowset/rag_pending.txt
       fi
     fi
     # 이전 pending이 해결됐으면 제거
-    if [[ -f ".ralph/rag_pending.txt" ]] && echo "$changed_files" | grep -qE '^\.claude/memory/rag/'; then
-      rm -f .ralph/rag_pending.txt
+    if [[ -f ".flowset/rag_pending.txt" ]] && echo "$changed_files" | grep -qE '^\.claude/memory/rag/'; then
+      rm -f .flowset/rag_pending.txt
     fi
   fi
 
@@ -598,13 +598,13 @@ validate_post_iteration() {
   file_count=$(echo "$changed_files_all" | grep -c '.' 2>/dev/null || echo "0")
   if [[ $file_count -gt 10 ]]; then
     log "WARNING: 변경 파일 ${file_count}개 (10개 초과) — scope creep 의심"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] scope creep: ${file_count}개 파일 변경 (Iteration #$loop_count)" >> .ralph/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] scope creep: ${file_count}개 파일 변경 (Iteration #$loop_count)" >> .flowset/guardrails.md
   fi
 
   # 5. 금지 파일 수정 감지
   if echo "$changed_files_all" | grep -qE '^\.(env|env\.local)$|^package-lock\.json$' 2>/dev/null; then
     log "WARNING: 금지 파일 수정 감지 (.env/package-lock)"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] 금지 파일 수정 감지 (Iteration #$loop_count)" >> .ralph/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] 금지 파일 수정 감지 (Iteration #$loop_count)" >> .flowset/guardrails.md
   fi
 
   # 6. 빈 구현 감지 (TODO/placeholder/stub)
@@ -613,19 +613,19 @@ validate_post_iteration() {
     incomplete=$(echo "$changed_files_all" | xargs grep -l 'TODO\|FIXME\|placeholder\|stub\|not implemented\|NotImplemented' 2>/dev/null | head -3 || true)
     if [[ -n "$incomplete" ]]; then
       log "WARNING: 불완전 구현 감지 (TODO/placeholder) — $incomplete"
-      echo "### [$(date '+%Y-%m-%d %H:%M')] 불완전 구현: $incomplete (Iteration #$loop_count)" >> .ralph/guardrails.md
+      echo "### [$(date '+%Y-%m-%d %H:%M')] 불완전 구현: $incomplete (Iteration #$loop_count)" >> .flowset/guardrails.md
     fi
   fi
 
   # 7. API 형식 검증 (contracts/ 존재 시)
-  if [[ -f ".ralph/contracts/api-standard.md" ]] && [[ -n "$changed_files_all" ]]; then
+  if [[ -f ".flowset/contracts/api-standard.md" ]] && [[ -n "$changed_files_all" ]]; then
     local new_apis
     new_apis=$(echo "$changed_files_all" | grep -E 'route\.(ts|js)$' || true)
     if [[ -n "$new_apis" ]]; then
       for api_file in $new_apis; do
         if [[ -f "$api_file" ]] && ! grep -q "NextResponse\|Response\|json(" "$api_file" 2>/dev/null; then
           log "WARNING: API 형식 미준수 — $api_file"
-          echo "### [$(date '+%Y-%m-%d %H:%M')] API 형식 미준수: $api_file (Iteration #$loop_count)" >> .ralph/guardrails.md
+          echo "### [$(date '+%Y-%m-%d %H:%M')] API 형식 미준수: $api_file (Iteration #$loop_count)" >> .flowset/guardrails.md
         fi
       done
     fi
@@ -643,7 +643,7 @@ validate_post_iteration() {
       done
       if [[ "$has_get" == false ]]; then
         log "WARNING: WI에 GET 명시됐으나 API 라우트에 GET 핸들러 없음"
-        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: GET 핸들러 누락 (Iteration #$loop_count)" >> .ralph/guardrails.md
+        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: GET 핸들러 누락 (Iteration #$loop_count)" >> .flowset/guardrails.md
       fi
     fi
     # "POST" 수용 기준인데 POST 핸들러 없음
@@ -654,14 +654,14 @@ validate_post_iteration() {
       done
       if [[ "$has_post" == false ]]; then
         log "WARNING: WI에 POST 명시됐으나 API 라우트에 POST 핸들러 없음"
-        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: POST 핸들러 누락 (Iteration #$loop_count)" >> .ralph/guardrails.md
+        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: POST 핸들러 누락 (Iteration #$loop_count)" >> .flowset/guardrails.md
       fi
     fi
   fi
 
   if [[ $violations -gt 0 ]]; then
     log "POST-VALIDATION: $violations violations detected"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] 자동 감지: $violations건 규칙 위반 (Iteration #$loop_count)" >> .ralph/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] 자동 감지: $violations건 규칙 위반 (Iteration #$loop_count)" >> .flowset/guardrails.md
     return 1
   fi
   return 0
@@ -807,9 +807,9 @@ build_context() {
   local rag
   rag=$(build_rag_context "$target_wi")
   cat <<EOF
-[Ralph Loop #$loop_count] Completed: $completed | Remaining: $remaining
+[FlowSet #$loop_count] Completed: $completed | Remaining: $remaining
 [TARGET] ${target_wi}
-[RULE] 위 TARGET 작업 1개만 처리하고 RALPH_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
+[RULE] 위 TARGET 작업 1개만 처리하고 FLOWSET_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
 ${rag}
 EOF
 }
@@ -818,7 +818,7 @@ EOF
 # Section 6: RAG SYSTEM
 #==============================
 
-RAG_DIR=".ralph/rag"
+RAG_DIR=".flowset/rag"
 
 generate_codebase_map() {
   # 프로젝트 파일 구조 + 핵심 정보를 경량 맵으로 생성
@@ -829,7 +829,7 @@ generate_codebase_map() {
     echo "# Codebase Map (auto-generated: $(date '+%Y-%m-%d %H:%M'))"
     echo ""
     echo "## Structure"
-    tree -I 'node_modules|.git|.next|dist|.worktrees|.ralph' --dirsfirst -L 3 -F 2>/dev/null \
+    tree -I 'node_modules|.git|.next|dist|.worktrees|.flowset' --dirsfirst -L 3 -F 2>/dev/null \
       || find . -maxdepth 3 -type f ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/.next/*' 2>/dev/null | sort | head -80
     echo ""
     # DB Models
@@ -998,8 +998,8 @@ log_trace() {
   # 구조화된 trace 기록 (JSON Lines) — eval harness 데이터
   # $1: WI 이름, $2: result, $3: files changed count, $4: elapsed seconds
   local wi_name="${1:-}" result="${2:-}" files_count="${3:-0}" elapsed="${4:-0}"
-  local trace_file=".ralph/logs/trace.jsonl"
-  mkdir -p .ralph/logs
+  local trace_file=".flowset/logs/trace.jsonl"
+  mkdir -p .flowset/logs
 
   local cost="${iteration_cost:-0}"
   local turns="${MAX_TURNS:-0}"
@@ -1060,17 +1060,17 @@ $success_patterns
   fi
 
   # 5. RAG pending (이전 워커가 RAG 업데이트 놓친 경우)
-  if [[ -f ".ralph/rag_pending.txt" ]]; then
+  if [[ -f ".flowset/rag_pending.txt" ]]; then
     parts+="[RAG UPDATE REQUIRED]
-$(cat .ralph/rag_pending.txt)
+$(cat .flowset/rag_pending.txt)
 이전 워커가 RAG 업데이트를 놓쳤습니다. 이번 작업에서 관련 .claude/memory/rag/ 파일도 함께 업데이트하세요.
 "
   fi
 
   # 6. Guardrails
-  if [[ -f ".ralph/guardrails.md" ]]; then
+  if [[ -f ".flowset/guardrails.md" ]]; then
     parts+="[GUARDRAILS — 반드시 준수]
-$(cat .ralph/guardrails.md)
+$(cat .flowset/guardrails.md)
 "
   fi
 
@@ -1138,13 +1138,13 @@ wait_for_merge() {
   fi
 
   log "⏳ PR #$pr_number 머지 대기..."
-  bash .ralph/scripts/enqueue-pr.sh "$pr_number" --wait --timeout 15
+  bash .flowset/scripts/enqueue-pr.sh "$pr_number" --wait --timeout 15
   local result=$?
 
   case $result in
     0) log "✅ PR #$pr_number 머지 완료" ;;
     1) log "❌ PR #$pr_number 실패/닫힘 — guardrails 기록"
-       echo "### [$(date '+%Y-%m-%d %H:%M')] PR #$pr_number 머지 실패 (Iteration #$loop_count)" >> .ralph/guardrails.md ;;
+       echo "### [$(date '+%Y-%m-%d %H:%M')] PR #$pr_number 머지 실패 (Iteration #$loop_count)" >> .flowset/guardrails.md ;;
     2) log "⚠️ PR #$pr_number timeout — 다음 iteration에서 처리" ;;
   esac
   return $result
@@ -1194,7 +1194,7 @@ wait_for_batch_merge() {
           pr_states[$pr]="failed"
           failed=$((failed + 1))
           log "  ❌ PR #$pr 실패/닫힘 ($failed failed)"
-          echo "### [$(date '+%Y-%m-%d %H:%M')] batch PR #$pr 머지 실패" >> .ralph/guardrails.md
+          echo "### [$(date '+%Y-%m-%d %H:%M')] batch PR #$pr 머지 실패" >> .flowset/guardrails.md
           ;;
       esac
     done
@@ -1298,11 +1298,11 @@ reconcile_fix_plan() {
       git commit -m "WI-chore fix_plan 동기화 (${changed}건 완료)" 2>/dev/null || true
       if git push -u origin "$fp_branch" 2>/dev/null; then
         local fp_pr_url
-        fp_pr_url=$(gh pr create --base main --head "$fp_branch" --title "WI-chore fix_plan 동기화 (${changed}건)" --body "Ralph Loop 종료 시 자동 생성" 2>/dev/null) || true
+        fp_pr_url=$(gh pr create --base main --head "$fp_branch" --title "WI-chore fix_plan 동기화 (${changed}건)" --body "FlowSet 종료 시 자동 생성" 2>/dev/null) || true
         if [[ -n "${fp_pr_url:-}" ]]; then
           local fp_pr_number
           fp_pr_number=$(echo "$fp_pr_url" | grep -oE '[0-9]+$')
-          bash .ralph/scripts/enqueue-pr.sh "$fp_pr_number" 2>/dev/null || true
+          bash .flowset/scripts/enqueue-pr.sh "$fp_pr_number" 2>/dev/null || true
           log "📋 fix_plan PR: $fp_pr_url"
         fi
       fi
@@ -1338,7 +1338,7 @@ setup_worktree() {
   }
 
   # Copy gitignored/untracked files needed by claude
-  for f in .ralphrc; do
+  for f in .flowsetrc; do
     [[ -f "$f" ]] && cp "$f" "$worktree_path/$f" 2>/dev/null || true
   done
   mkdir -p "$worktree_path/$LOG_DIR"
@@ -1402,9 +1402,9 @@ _RALPH_CTX_END_
     local rag_context
     rag_context=$(build_rag_context "$wi")
 
-    context="[Ralph Loop #$loop_count - Worker $idx/$wi_count] Completed: $completed | Remaining: $unchecked
+    context="[FlowSet #$loop_count - Worker $idx/$wi_count] Completed: $completed | Remaining: $unchecked
 [TARGET] ${wi}
-[RULE] 위 TARGET 작업 1개만 처리하고 RALPH_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
+[RULE] 위 TARGET 작업 1개만 처리하고 FLOWSET_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
 ${context}
 ${rag_context}"
 
@@ -1466,10 +1466,10 @@ ${rag_context}"
     wt_sha=$(git -C "$wt_path" rev-parse HEAD 2>/dev/null || echo "none")
     base_sha=$(git merge-base HEAD "$branch" 2>/dev/null || echo "none")
 
-    # 워커 로그에서 RALPH_STATUS 존재 확인 (--max-turns 도달 시 미출력)
+    # 워커 로그에서 FLOWSET_STATUS 존재 확인 (--max-turns 도달 시 미출력)
     local worker_log="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${loop_count}_${idx}.log"
     local has_status=false
-    if grep -q 'RALPH_STATUS\|STATUS:' "$worker_log" 2>/dev/null; then
+    if grep -q 'FLOWSET_STATUS\|STATUS:' "$worker_log" 2>/dev/null; then
       has_status=true
     fi
 
@@ -1498,7 +1498,7 @@ ${rag_context}"
         mark_wi_done "${worktree_wi[$i]}" || true
         log "  [Worker $idx] 이미 구현됨 — completed_wis.txt 기록"
       elif [[ "$has_status" == false ]]; then
-        log "  [Worker $idx] ⚠️ 턴 제한 도달 (RALPH_STATUS 없음) — 스킵"
+        log "  [Worker $idx] ⚠️ 턴 제한 도달 (FLOWSET_STATUS 없음) — 스킵"
         record_pattern "${worktree_wi[$i]}" "timeout" "" "$elapsed" || true
       else
         log "  [Worker $idx] 변경 없음 — 스킵"
@@ -1506,7 +1506,7 @@ ${rag_context}"
       fi
       skipped=$((skipped + 1))
     elif [[ "$has_status" == false ]]; then
-      # 코드 변경은 있지만 RALPH_STATUS 없음 → 불완전 가능성
+      # 코드 변경은 있지만 FLOWSET_STATUS 없음 → 불완전 가능성
       log "  [Worker $idx] ⚠️ 턴 제한 도달 (불완전 코드) — 머지 건너뜀"
       record_pattern "${worktree_wi[$i]}" "timeout" "$changed_files" "$elapsed" || true
       skipped=$((skipped + 1))
@@ -1541,7 +1541,7 @@ ${rag_context}"
           --base main \
           --head "$pr_branch" \
           --title "$wi" \
-          --body "Ralph Loop 자동 생성 PR" \
+          --body "FlowSet 자동 생성 PR" \
           2>"$LOG_DIR/pr_${idx}.log") || true
 
         if [[ -n "$pr_url" ]]; then
@@ -1553,7 +1553,7 @@ ${rag_context}"
           # merge queue에 등록 (CI 통과 시 자동 머지)
           local pr_number
           pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
-          bash .ralph/scripts/enqueue-pr.sh "$pr_number" 2>/dev/null || {
+          bash .flowset/scripts/enqueue-pr.sh "$pr_number" 2>/dev/null || {
             log "  [Worker $idx] ⚠️ merge queue 등록 실패 (수동 머지 필요)"
           }
         else
@@ -1698,12 +1698,12 @@ execute_claude() {
     return 1
   fi
 
-  # RALPH_STATUS에서 TESTS_ADDED 파싱 → 0이면 TDD 미수행 경고
+  # FLOWSET_STATUS에서 TESTS_ADDED 파싱 → 0이면 TDD 미수행 경고
   local tests_added
   tests_added=$(echo "$output" | grep -oE 'TESTS_ADDED:\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
   if [[ "${tests_added:-}" == "0" ]]; then
     log "WARNING: TESTS_ADDED=0 — TDD 미수행 의심"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] TDD 미수행: 테스트 0개 추가 (Iteration #$loop_count)" >> .ralph/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] TDD 미수행: 테스트 0개 추가 (Iteration #$loop_count)" >> .flowset/guardrails.md
   fi
 
   return 0
@@ -1752,7 +1752,7 @@ main() {
     generate_codebase_map || true
   fi
 
-  log "=== Ralph Loop v${RALPH_VERSION} Started ==="
+  log "=== FlowSet v${FLOWSET_VERSION} Started ==="
   log "Max iterations: $MAX_ITERATIONS | Rate limit: $RATE_LIMIT_PER_HOUR/hr"
   if [[ $PARALLEL_COUNT -gt 1 ]]; then
     log "Mode: 병렬 (${PARALLEL_COUNT}x worktree)"
@@ -1817,15 +1817,15 @@ main() {
       last_git_sha=$(git rev-parse HEAD 2>/dev/null || echo "none")
 
       # 병렬 모드: 검증 에이전트 실행
-      if [[ -f ".ralph/scripts/verify-requirements.sh" && -f ".ralph/requirements.md" ]]; then
+      if [[ -f ".flowset/scripts/verify-requirements.sh" && -f ".flowset/requirements.md" ]]; then
         log "🔍 검증 에이전트 실행 (병렬 batch 완료 후)..."
         local verify_result=0
-        bash .ralph/scripts/verify-requirements.sh || verify_result=$?
+        bash .flowset/scripts/verify-requirements.sh || verify_result=$?
         if [[ $verify_result -eq 2 ]]; then
           log "⚠️ 검증 에이전트: 요구사항 누락 감지"
-          if [[ -f ".ralph/verify-result.md" ]]; then
-            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$loop_count, 병렬)" >> .ralph/guardrails.md
-            grep -E '^- (❌|⚠️)' .ralph/verify-result.md >> .ralph/guardrails.md 2>/dev/null || true
+          if [[ -f ".flowset/verify-result.md" ]]; then
+            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$loop_count, 병렬)" >> .flowset/guardrails.md
+            grep -E '^- (❌|⚠️)' .flowset/verify-result.md >> .flowset/guardrails.md 2>/dev/null || true
           fi
         fi
       fi
@@ -1870,15 +1870,15 @@ main() {
       }
 
       # 검증 에이전트 실행 (구현-검증 분리)
-      if [[ -f ".ralph/scripts/verify-requirements.sh" && -f ".ralph/requirements.md" ]]; then
+      if [[ -f ".flowset/scripts/verify-requirements.sh" && -f ".flowset/requirements.md" ]]; then
         log "🔍 검증 에이전트 실행..."
         local verify_result=0
-        bash .ralph/scripts/verify-requirements.sh || verify_result=$?
+        bash .flowset/scripts/verify-requirements.sh || verify_result=$?
         if [[ $verify_result -eq 2 ]]; then
           log "⚠️ 검증 에이전트: 요구사항 누락 감지 — guardrails 기록"
-          if [[ -f ".ralph/verify-result.md" ]]; then
-            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$loop_count)" >> .ralph/guardrails.md
-            grep -E '^- (❌|⚠️)' .ralph/verify-result.md >> .ralph/guardrails.md 2>/dev/null || true
+          if [[ -f ".flowset/verify-result.md" ]]; then
+            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$loop_count)" >> .flowset/guardrails.md
+            grep -E '^- (❌|⚠️)' .flowset/verify-result.md >> .flowset/guardrails.md 2>/dev/null || true
           fi
         fi
       fi

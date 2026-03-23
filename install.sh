@@ -151,9 +151,9 @@ else
   exit 1
 fi
 
-#--- 6. 템플릿을 ~/.claude/templates/ralph/에 복사 ---
+#--- 6. 템플릿을 ~/.claude/templates/flowset/에 복사 ---
 echo "[6/6] 템플릿 설치..."
-TEMPLATE_DST="$CLAUDE_DIR/templates/ralph"
+TEMPLATE_DST="$CLAUDE_DIR/templates/flowset"
 mkdir -p "$TEMPLATE_DST"
 cp -r "$SCRIPT_DIR/templates/"* "$TEMPLATE_DST/" 2>/dev/null || true
 cp -r "$SCRIPT_DIR/templates/".* "$TEMPLATE_DST/" 2>/dev/null || true

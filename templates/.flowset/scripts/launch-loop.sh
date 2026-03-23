@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Ralph Loop을 새 터미널 창에서 실행하는 스크립트
-# 사용법: bash .ralph/scripts/launch-loop.sh
+# FlowSet을 새 터미널 창에서 실행하는 스크립트
+# 사용법: bash .flowset/scripts/launch-loop.sh
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -27,34 +27,34 @@ case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
     BASH_EXE=$(find_windows_bash)
     if [[ -n "$BASH_EXE" ]]; then
-      start "" "$BASH_EXE" -c "cd '$PROJECT_DIR' && bash ralph.sh; read -p 'Press Enter to close...'"
+      start "" "$BASH_EXE" -c "cd '$PROJECT_DIR' && bash flowset.sh; read -p 'Press Enter to close...'"
       echo "LAUNCHED"
     else
       if command -v wsl &>/dev/null; then
         wsl_path=$(wslpath "$PROJECT_DIR" 2>/dev/null || echo "/mnt/c${PROJECT_DIR:2}")
-        start "" wsl bash -c "cd '$wsl_path' && bash ralph.sh; read -p 'Press Enter to close...'"
+        start "" wsl bash -c "cd '$wsl_path' && bash flowset.sh; read -p 'Press Enter to close...'"
         echo "LAUNCHED"
       else
         echo "ERROR: bash를 찾을 수 없습니다."
         echo "  1. Git for Windows (https://git-scm.com)"
         echo "  2. WSL (wsl --install)"
-        echo "  수동 실행: cd $PROJECT_DIR && bash ralph.sh"
+        echo "  수동 실행: cd $PROJECT_DIR && bash flowset.sh"
       fi
     fi
     ;;
   Linux*)
     if grep -qi microsoft /proc/version 2>/dev/null; then
-      setsid bash -c "cd '$PROJECT_DIR' && bash ralph.sh" &>/dev/null &
+      setsid bash -c "cd '$PROJECT_DIR' && bash flowset.sh" &>/dev/null &
       echo "LAUNCHED"
     else
       if command -v gnome-terminal &>/dev/null; then
-        gnome-terminal -- bash -c "cd '$PROJECT_DIR' && bash ralph.sh; read -p 'Press Enter...'"
+        gnome-terminal -- bash -c "cd '$PROJECT_DIR' && bash flowset.sh; read -p 'Press Enter...'"
       elif command -v konsole &>/dev/null; then
-        konsole -e bash -c "cd '$PROJECT_DIR' && bash ralph.sh; read -p 'Press Enter...'" &
+        konsole -e bash -c "cd '$PROJECT_DIR' && bash flowset.sh; read -p 'Press Enter...'" &
       elif command -v xterm &>/dev/null; then
-        xterm -e "cd '$PROJECT_DIR' && bash ralph.sh; read -p 'Press Enter...'" &
+        xterm -e "cd '$PROJECT_DIR' && bash flowset.sh; read -p 'Press Enter...'" &
       else
-        setsid bash -c "cd '$PROJECT_DIR' && bash ralph.sh" &>/dev/null &
+        setsid bash -c "cd '$PROJECT_DIR' && bash flowset.sh" &>/dev/null &
       fi
       echo "LAUNCHED"
     fi
@@ -62,19 +62,19 @@ case "$(uname -s)" in
   Darwin*)
     # tmux: Claude Code 세션과 완전 독립 (stdout 리다이렉트 문제 없음)
     if command -v tmux &>/dev/null; then
-      tmux kill-session -t ralph 2>/dev/null || true
-      tmux new-session -d -s ralph -c "$PROJECT_DIR" "bash ralph.sh; echo ''; echo 'Ralph Loop 종료. Enter로 닫기'; read"
+      tmux kill-session -t flowset 2>/dev/null || true
+      tmux new-session -d -s flowset -c "$PROJECT_DIR" "bash flowset.sh; echo ''; echo 'FlowSet 종료. Enter로 닫기'; read"
       echo "LAUNCHED"
       echo ""
-      echo "🚀 Ralph Loop이 tmux 세션 'ralph'에서 시작되었습니다!"
-      echo "   모니터링: tmux attach -t ralph"
-      echo "   로그: tail -f $PROJECT_DIR/.ralph/logs/ralph.log"
+      echo "🚀 FlowSet이 tmux 세션 'flowset'에서 시작되었습니다!"
+      echo "   모니터링: tmux attach -t flowset"
+      echo "   로그: tail -f $PROJECT_DIR/.flowset/logs/flowset.log"
     else
       # tmux 없으면 osascript fallback
       if osascript -e 'exists application "iTerm"' 2>/dev/null; then
-        osascript -e "tell application \"iTerm\" to create window with default profile command \"cd '$PROJECT_DIR' && bash ralph.sh\""
+        osascript -e "tell application \"iTerm\" to create window with default profile command \"cd '$PROJECT_DIR' && bash flowset.sh\""
       else
-        osascript -e "tell application \"Terminal\" to do script \"cd '$PROJECT_DIR' && bash ralph.sh\""
+        osascript -e "tell application \"Terminal\" to do script \"cd '$PROJECT_DIR' && bash flowset.sh\""
       fi
       echo "LAUNCHED"
       echo ""
@@ -83,6 +83,6 @@ case "$(uname -s)" in
     fi
     ;;
   *)
-    echo "ERROR: 지원하지 않는 OS입니다. 수동 실행: cd $PROJECT_DIR && bash ralph.sh"
+    echo "ERROR: 지원하지 않는 OS입니다. 수동 실행: cd $PROJECT_DIR && bash flowset.sh"
     ;;
 esac

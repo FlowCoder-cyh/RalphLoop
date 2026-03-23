@@ -62,17 +62,17 @@ if [[ -n "$e2e_files" ]]; then
 fi
 
 # 3. requirements.md 수정 감지
-if [[ -f ".ralph/requirements.md" ]]; then
-  if echo "$changed_files" | grep -qF '.ralph/requirements.md' 2>/dev/null; then
-    issues+=("requirements.md 수정 감지 — 사용자 원본이며 수정 금지. git checkout -- .ralph/requirements.md 실행")
+if [[ -f ".flowset/requirements.md" ]]; then
+  if echo "$changed_files" | grep -qF '.flowset/requirements.md' 2>/dev/null; then
+    issues+=("requirements.md 수정 감지 — 사용자 원본이며 수정 금지. git checkout -- .flowset/requirements.md 실행")
   fi
 fi
 
 # 4. 검증 에이전트 트리거 (소스 3파일+ 변경 시)
-if [[ -f ".ralph/scripts/verify-requirements.sh" && -f ".ralph/requirements.md" ]]; then
+if [[ -f ".flowset/scripts/verify-requirements.sh" && -f ".flowset/requirements.md" ]]; then
   src_count=$(echo "$changed_files" | grep -cE '\.(ts|tsx|js|jsx|py|go|rs)$' 2>/dev/null || echo "0")
   if [[ "$src_count" -ge 3 ]]; then
-    verify_output=$(bash .ralph/scripts/verify-requirements.sh 2>&1 || true)
+    verify_output=$(bash .flowset/scripts/verify-requirements.sh 2>&1 || true)
     verify_exit=$?
     if [[ $verify_exit -eq 2 ]]; then
       issues+=("검증 에이전트: 요구사항 누락 감지 — $verify_output")
@@ -81,8 +81,8 @@ if [[ -f ".ralph/scripts/verify-requirements.sh" && -f ".ralph/requirements.md" 
 fi
 
 # 5. v3.0: Vault 상태 동기화 (비차단 — 정보 기록용)
-if [[ -f ".ralphrc" ]]; then
-  source .ralphrc 2>/dev/null || true
+if [[ -f ".flowsetrc" ]]; then
+  source .flowsetrc 2>/dev/null || true
   if [[ "${VAULT_ENABLED:-false}" == "true" && -n "${VAULT_API_KEY:-}" ]]; then
     # 변경 파일 요약을 vault에 기록
     change_summary=$(echo "$changed_files" | sed '/^$/d' | sort -u | head -20 | tr '\n' ', ')
