@@ -134,6 +134,9 @@ cp "$TEMPLATE_DIR/.claude/settings.json" ./.claude/settings.json
 cp "$TEMPLATE_DIR/.ralph/scripts/stop-rag-check.sh" ./.ralph/scripts/stop-rag-check.sh
 cp "$TEMPLATE_DIR/.ralph/scripts/session-start-vault.sh" ./.ralph/scripts/session-start-vault.sh
 cp "$TEMPLATE_DIR/.ralph/scripts/notify-contract-change.sh" ./.ralph/scripts/notify-contract-change.sh
+cp "$TEMPLATE_DIR/.ralph/scripts/check-cross-team-impact.sh" ./.ralph/scripts/check-cross-team-impact.sh
+cp "$TEMPLATE_DIR/.ralph/scripts/rollback.sh" ./.ralph/scripts/rollback.sh
+cp "$TEMPLATE_DIR/.ralph/tech-debt.md" ./.ralph/tech-debt.md 2>/dev/null || true
 
 # v3.0: 소유권 hook + vault helpers + 계약 템플릿
 cp "$TEMPLATE_DIR/.ralph/scripts/check-ownership.sh" ./.ralph/scripts/check-ownership.sh

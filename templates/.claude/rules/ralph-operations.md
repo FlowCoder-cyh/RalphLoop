@@ -7,6 +7,9 @@
 - **소유권 hook**: TEAM_NAME 설정 시 팀 소유 디렉토리만 수정 가능 (PreToolUse hook)
 - **계약 기반 소통**: .ralph/contracts/ 파일로 팀 간 인터페이스 합의
 - **Agent Teams**: 선택적 — 리드가 팀 구성, 역할별 작업 분배
+- **팀간 리뷰 차단**: contracts/schema 변경 시 PreToolUse hook이 일반 팀원 차단 → 리드 경유 필수
+- **기술부채 관리**: .ralph/tech-debt.md에 누적, 임계치(10건) 초과 시 preflight 경고
+- **롤백**: `bash .ralph/scripts/rollback.sh [code|db|deploy]` — 정상 PR 프로세스 유지
 
 ## 0. requirements.md — 사용자 원본 (수정 절대 금지)
 - `.ralph/requirements.md`는 `/wi:prd` 확정 시 사용자 요구사항에서 자동 생성됨

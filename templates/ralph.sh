@@ -491,6 +491,13 @@ preflight() {
     fi
   fi
 
+  # v3.0: 기술부채 임계치 경고 (비차단)
+  local debt_warning
+  debt_warning=$(vault_check_tech_debt 10 2>/dev/null)
+  if [[ -n "$debt_warning" ]]; then
+    log "WARN: $debt_warning"
+  fi
+
   if [[ $errors -gt 0 ]]; then
     echo ""
     echo "$errors개 오류. Ralph Loop을 시작할 수 없습니다."

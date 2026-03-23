@@ -33,6 +33,31 @@
 - `wi:init`: vault-helpers, check-ownership, ownership.json, contracts, agents 복사 추가
 - `wi:start`: Phase 4.7 Vault 연동 설정 추가
 
+### SessionStart hook + 컨텍스트 자동 주입
+- `session-start-vault.sh`: startup/resume/clear/compact 모두에서 vault state.md 주입
+- PostCompact은 additionalContext 미지원 (공식 스펙) → SessionStart(source:compact)가 대체
+
+### 팀간 리뷰 차단 (PreToolUse)
+- `check-cross-team-impact.sh`: contracts/, prisma/schema, requirements.md 변경 시 차단
+- devops/planning 팀은 허용 (알림만), 일반 팀원은 리드 경유 필수
+
+### 기술부채 관리
+- `.ralph/tech-debt.md`: 부채 등록 템플릿 (P0/P1/P2 우선순위)
+- `vault-helpers.sh`: vault_check_tech_debt() 임계치 경고
+- `ralph.sh`: preflight에서 open 부채 10건 초과 시 경고
+
+### 롤백/복구
+- `rollback.sh`: code (git revert → PR), db (prisma migrate resolve), deploy (vercel rollback)
+- 롤백도 정상 PR 프로세스 유지 (hotfix 제외)
+
+### 계약 변경 알림 (PostToolUse)
+- `notify-contract-change.sh`: contracts/ 변경 시 관련 팀 알림
+
+### Agent 정의 공식 스펙 준수
+- `lead-workflow.md`: name 필드, disallowedTools 적용
+- `spawn-template.md` → `team-worker.md`: 정식 서브에이전트
+- `team-roles.md`: agents/ → rules/ 이동 (참조 문서)
+
 ### 설계 원칙
 - v2.x 하위 호환: VAULT_ENABLED=false, TEAM_NAME 미설정 시 기존 동작 유지
 - vault 연결 실패 시 파일 기반 RAG 폴백 (graceful degradation)

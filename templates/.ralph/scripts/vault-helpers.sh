@@ -139,3 +139,21 @@ vault_record() {
 
   vault_write "${VAULT_PROJECT_NAME}/${category}/${filename}" "${content}"
 }
+
+# 기술부채 수 확인 → 임계치 초과 시 경고 메시지 반환
+# $1: 임계치 (기본 10)
+vault_check_tech_debt() {
+  local threshold="${1:-10}"
+  local debt_file=".ralph/tech-debt.md"
+
+  [[ ! -f "$debt_file" ]] && return 0
+
+  local open_count
+  open_count=$(grep -c '^\- \*\*상태\*\*: open' "$debt_file" 2>/dev/null || echo "0")
+
+  if [[ "$open_count" -ge "$threshold" ]]; then
+    echo "기술부채 ${open_count}건 누적 (임계치: ${threshold}). 해소 작업을 우선 배치하세요."
+    return 1
+  fi
+  return 0
+}

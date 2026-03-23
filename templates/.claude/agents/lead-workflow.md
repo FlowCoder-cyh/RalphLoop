@@ -29,8 +29,22 @@ disallowedTools: Edit, Write
 ### 3단계: 태스크 분해 + 의존성 설정
 - 각 WI를 태스크로 등록 (TaskCreate)
 - 의존성 설정 (TaskUpdate.addBlockedBy)
-  - 예: 프론트엔드 UI (#3)는 백엔드 API (#2) 완료 후
 - 팀별 태스크 할당 (TaskUpdate.owner)
+
+#### 의존성 패턴
+| 패턴 | 예시 | 설정 |
+|------|------|------|
+| API 먼저 | 프론트 UI → 백엔드 API | #3.addBlockedBy(#2) |
+| 스키마 먼저 | API 구현 → DB 스키마 | #2.addBlockedBy(#1) |
+| 테스트 후행 | QA E2E → 기능 구현 전체 | #5.addBlockedBy(#2, #3, #4) |
+| 병렬 가능 | 독립 도메인 | 의존성 없음 |
+
+#### 교착 방지 규칙
+- **단방향만 허용**: A→B 의존성 설정 시, B→A는 금지
+- **계층 구조**: 스키마 → API → UI → 테스트 순서 유지
+- **교착 감지**: 태스크 2개 이상이 서로를 blocking하면 즉시 해소
+  - 해소 방법: 인터페이스 mock으로 한쪽 unblock → 실 구현 후 교체
+- **5-6 태스크/팀원**: 한 팀원에게 과다 할당 금지
 
 ### 4단계: 팀원 Spawn
 각 팀원은 Agent tool의 team-worker 서브에이전트로 spawn합니다:
