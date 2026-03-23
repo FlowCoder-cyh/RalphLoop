@@ -14,7 +14,7 @@ set -euo pipefail
 #   - safe_sync_main() uses fetch+reset (safe: no local commits on main)
 #   - Removed: sync_completed_file, check_wi_implemented, recover_stale_wis
 #==============================
-RALPH_VERSION="2.2.0"
+RALPH_VERSION="3.0.0"
 
 # UTF-8 강제 (Windows 한글 깨짐 방지)
 export LANG=en_US.UTF-8
@@ -43,6 +43,11 @@ cd "$SCRIPT_DIR"
 # Load config (preflight에서 존재 확인하므로 여기서는 soft fail)
 if [[ -f .ralphrc ]]; then
   source .ralphrc
+fi
+
+# Vault helpers (v3.0 — VAULT_ENABLED=false이면 모든 호출 무동작)
+if [[ -f .ralph/scripts/vault-helpers.sh ]]; then
+  source .ralph/scripts/vault-helpers.sh
 fi
 
 # Defaults (위에서 .ralphrc가 설정하지 않은 값만 적용)
@@ -105,6 +110,11 @@ save_state() {
   "status": "${1:-running}"
 }
 EOF
+
+  # v3.0: vault state 동기화
+  local completed_count
+  completed_count=$(wc -l < "$COMPLETED_FILE" 2>/dev/null || echo "0")
+  vault_sync_state "${1:-running}" "$loop_count" "$MAX_ITERATIONS" "$completed_count" "$total_cost_usd"
 }
 
 restore_state() {
@@ -463,6 +473,16 @@ preflight() {
         b=$(echo "$b" | tr -d ' *')
         [[ -n "$b" ]] && git branch -D "$b" 2>/dev/null || true
       done <<< "$stale_br"
+    fi
+  fi
+
+  # v3.0: Obsidian vault 연결 확인 (실패해도 비차단 — graceful degradation)
+  if [[ "${VAULT_ENABLED:-false}" == "true" ]]; then
+    if vault_check; then
+      log "Obsidian vault 연결 확인 (${VAULT_URL})"
+      vault_init_project
+    else
+      log "Obsidian vault 연결 실패 — 파일 기반 RAG만 사용"
     fi
   fi
 
@@ -956,6 +976,10 @@ record_pattern() {
   if [[ -f "$patterns_file" ]] && [[ $(wc -l < "$patterns_file") -gt 50 ]]; then
     tail -50 "$patterns_file" > "${patterns_file}.tmp" 2>/dev/null && mv "${patterns_file}.tmp" "$patterns_file" 2>/dev/null || true
   fi
+
+  # v3.0: vault에도 패턴 기록
+  vault_record "patterns" "iter-${loop_count}.md" \
+    "- ${result} | ${wi_type} | ${domain} | ${elapsed}s | ${files:-none}" 2>/dev/null || true
 }
 
 log_trace() {
@@ -1046,6 +1070,32 @@ $(cat .ralph/guardrails.md)
 
 ${regression_issues}
 "
+  fi
+
+  # 7. v3.0: Vault 시맨틱 검색 (이전 세션 지식)
+  if [[ "${VAULT_ENABLED:-false}" == "true" && -n "$wi_name" ]]; then
+    local vault_results
+    vault_results=$(vault_search "$wi_name" 2>/dev/null)
+    if [[ -n "$vault_results" && "$vault_results" != "[]" ]]; then
+      # 상위 3개 결과의 파일명만 추출
+      local vault_files
+      vault_files=$(echo "$vault_results" | jq -r '.[0:3] | .[].filename' 2>/dev/null)
+      if [[ -n "$vault_files" ]]; then
+        local vault_content=""
+        while IFS= read -r vf; do
+          [[ -z "$vf" ]] && continue
+          local vc
+          vc=$(vault_read "$vf" 2>/dev/null | head -30)
+          [[ -n "$vc" ]] && vault_content+="--- ${vf} ---
+${vc}
+"
+        done <<< "$vault_files"
+        if [[ -n "$vault_content" ]]; then
+          parts+="[VAULT KNOWLEDGE — 이전 세션 관련 정보]
+${vault_content}"
+        fi
+      fi
+    fi
   fi
 
   echo "$parts"

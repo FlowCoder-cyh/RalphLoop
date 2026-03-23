@@ -17,9 +17,11 @@ wireframes/             → 와이어프레임 HTML (PRD 확정 시 생성)
 docs/                   → 문서 계층구조 (L0~L4)
 .ralph/                 → Ralph Loop 설정
 .ralph/requirements.md  → 사용자 원본 요구사항 (수정 금지)
-.ralph/contracts/       → API 표준 + 데이터 흐름 계약
+.ralph/contracts/       → 팀 간 API 표준 + 데이터 흐름 계약 (v3.0)
+.ralph/ownership.json   → 팀별 소유 디렉토리 매핑 (v3.0)
 .github/                → CI/CD 워크플로우
 .claude/rules/          → 프로젝트 규칙 (자동 로드)
+.claude/agents/         → Agent Teams 팀 역할 정의 (v3.0)
 .claude/memory/rag/     → RAG 참조 문서
 ```
 

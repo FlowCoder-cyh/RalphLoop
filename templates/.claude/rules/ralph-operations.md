@@ -1,6 +1,12 @@
-# Ralph Loop v2.2.0 운영 규칙
+# Ralph Loop v3.0 운영 규칙
 
 이 규칙은 Ralph Loop이 설치된 프로젝트에서 모든 세션(대화형 + 비대화형)에 적용됩니다.
+
+## v3.0 추가 사항
+- **Obsidian vault 연동**: VAULT_ENABLED=true 시 세션 간 맥락 자동 동기화
+- **소유권 hook**: TEAM_NAME 설정 시 팀 소유 디렉토리만 수정 가능 (PreToolUse hook)
+- **계약 기반 소통**: .ralph/contracts/ 파일로 팀 간 인터페이스 합의
+- **Agent Teams**: 선택적 — 리드가 팀 구성, 역할별 작업 분배
 
 ## 0. requirements.md — 사용자 원본 (수정 절대 금지)
 - `.ralph/requirements.md`는 `/wi:prd` 확정 시 사용자 요구사항에서 자동 생성됨

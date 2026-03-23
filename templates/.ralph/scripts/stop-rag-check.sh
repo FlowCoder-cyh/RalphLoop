@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Stop hook: RAG + E2E + requirements + 검증 에이전트
+# Stop hook: RAG + E2E + requirements + 검증 에이전트 + vault 동기화 (v3.0)
 # .claude/settings.json의 Stop hook으로 등록됨
 # 문제 발견 시 decision:"block" → Claude가 수정 작업 계속
+
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 
 # stdin에서 hook 입력 읽기 (stop_hook_active 확인)
 INPUT=$(cat 2>/dev/null || true)
@@ -74,6 +77,23 @@ if [[ -f ".ralph/scripts/verify-requirements.sh" && -f ".ralph/requirements.md" 
     if [[ $verify_exit -eq 2 ]]; then
       issues+=("검증 에이전트: 요구사항 누락 감지 — $verify_output")
     fi
+  fi
+fi
+
+# 5. v3.0: Vault 상태 동기화 (비차단 — 정보 기록용)
+if [[ -f ".ralphrc" ]]; then
+  source .ralphrc 2>/dev/null || true
+  if [[ "${VAULT_ENABLED:-false}" == "true" && -n "${VAULT_API_KEY:-}" ]]; then
+    # 변경 파일 요약을 vault에 기록
+    local_summary=$(echo "$changed_files" | sed '/^$/d' | sort -u | head -20 | tr '\n' ', ')
+    curl -s -k --max-time 3 \
+      "${VAULT_URL:-https://localhost:27124}/vault/${VAULT_PROJECT_NAME:-}/sessions/$(date '+%Y%m%d-%H%M%S').md" \
+      -H "Authorization: Bearer ${VAULT_API_KEY}" \
+      -X PUT -H "Content-Type: text/markdown" \
+      -d "# Session $(date '+%Y-%m-%d %H:%M')
+- Branch: $(git branch --show-current 2>/dev/null || echo unknown)
+- Changed: ${local_summary:-none}
+- Issues: ${#issues[@]}" > /dev/null 2>&1 || true
   fi
 fi
 

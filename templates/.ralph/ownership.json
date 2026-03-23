@@ -1,0 +1,17 @@
+{
+  "teams": {
+    "frontend": ["src/app/**", "src/components/**"],
+    "backend": ["src/api/**", "src/lib/**"],
+    "qa": ["e2e/**", "tests/**"],
+    "devops": [".github/**", ".claude/**", ".ralph/**"],
+    "planning": ["docs/**", "wireframes/**"]
+  },
+  "shared": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    ".gitignore",
+    "CLAUDE.md",
+    "prisma/schema.prisma"
+  ]
+}

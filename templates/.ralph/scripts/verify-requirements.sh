@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# 검증 에이전트: requirements.md vs 구현 대조
+# 검증 에이전트: requirements.md vs 구현 대조 + 계약 준수 (v3.0)
 # Stop hook 또는 ralph.sh에서 자동 호출
 # 구현 에이전트와 분리 — Read/Grep/Glob만 허용
 
 set -euo pipefail
+
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 
 # requirements.md 없으면 스킵
 [[ -f ".ralph/requirements.md" ]] || exit 0
@@ -58,12 +61,28 @@ if [[ -f "$RESULT_FILE" ]]; then
 
   if [[ "$MISSING" -gt 0 || "$INCOMPLETE" -gt 0 ]]; then
     echo ""
-    echo "🔍 검증 결과: 미구현 ${MISSING}건, 불완전 ${INCOMPLETE}건"
+    echo "검증 결과: 미구현 ${MISSING}건, 불완전 ${INCOMPLETE}건"
     grep -E '^- (❌|⚠️)' "$RESULT_FILE" 2>/dev/null || true
     echo ""
+
+    # v3.0: vault에 검증 결과 기록
+    if [[ -f ".ralphrc" ]]; then
+      source .ralphrc 2>/dev/null || true
+      if [[ "${VAULT_ENABLED:-false}" == "true" && -n "${VAULT_API_KEY:-}" ]]; then
+        local_result=$(cat "$RESULT_FILE" 2>/dev/null | head -50)
+        curl -s -k --max-time 3 \
+          "${VAULT_URL:-https://localhost:27124}/vault/${VAULT_PROJECT_NAME:-}/issues/verify-$(date '+%Y%m%d-%H%M%S').md" \
+          -H "Authorization: Bearer ${VAULT_API_KEY}" \
+          -X PUT -H "Content-Type: text/markdown" \
+          -d "# Verification Failed ($(date '+%Y-%m-%d %H:%M'))
+Missing: ${MISSING}, Incomplete: ${INCOMPLETE}
+${local_result}" > /dev/null 2>&1 || true
+      fi
+    fi
+
     exit 2
   else
-    echo "✅ 검증 통과: 요구사항 대비 누락 없음"
+    echo "검증 통과: 요구사항 대비 누락 없음"
     exit 0
   fi
 fi

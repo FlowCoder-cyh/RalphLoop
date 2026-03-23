@@ -30,3 +30,10 @@ COMMIT_PREFIX="WI"       # WI-NNN-[type] 한글 작업명 (NNN = 3자리 순번)
 # GitHub 계정 (wi:init Step 4.5에서 설정, wi:start Phase 5.9에서 참조)
 GITHUB_ACCOUNT_TYPE=""   # "org" 또는 "personal"
 GITHUB_ORG=""            # 조직명 또는 사용자명
+
+# Obsidian Vault 연동 (v3.0)
+# wi:init에서 자동 설정됨. Obsidian + Local REST API가 없으면 false 유지.
+VAULT_ENABLED=false
+VAULT_URL="https://localhost:27124"
+VAULT_API_KEY=""
+VAULT_PROJECT_NAME=""    # PROJECT_NAME과 동일하게 설정
