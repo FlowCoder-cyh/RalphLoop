@@ -125,12 +125,15 @@ cp "$TEMPLATE_DIR/.github/workflows/e2e.yml" ./.github/workflows/e2e.yml
 mkdir -p ./.claude/rules
 cp "$TEMPLATE_DIR/.claude/rules/ralph-operations.md" ./.claude/rules/ralph-operations.md
 cp "$TEMPLATE_DIR/.claude/rules/project.md" ./.claude/rules/project.md
+cp "$TEMPLATE_DIR/.claude/rules/team-roles.md" ./.claude/rules/team-roles.md 2>/dev/null || true
 
 # .claude/settings.json (PreToolUse 소유권 hook + Stop hook)
 cp "$TEMPLATE_DIR/.claude/settings.json" ./.claude/settings.json
 
 # Stop hook 스크립트
 cp "$TEMPLATE_DIR/.ralph/scripts/stop-rag-check.sh" ./.ralph/scripts/stop-rag-check.sh
+cp "$TEMPLATE_DIR/.ralph/scripts/session-start-vault.sh" ./.ralph/scripts/session-start-vault.sh
+cp "$TEMPLATE_DIR/.ralph/scripts/notify-contract-change.sh" ./.ralph/scripts/notify-contract-change.sh
 
 # v3.0: 소유권 hook + vault helpers + 계약 템플릿
 cp "$TEMPLATE_DIR/.ralph/scripts/check-ownership.sh" ./.ralph/scripts/check-ownership.sh

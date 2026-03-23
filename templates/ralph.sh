@@ -3,16 +3,21 @@ set -euo pipefail
 
 #==============================
 # Ralph Loop - Autonomous AI Development Loop
-# Version: 2.0.0
+# Version: 3.0.0
 #
-# KEY CHANGES FROM v1.0.0:
+# v3.0.0 CHANGES:
+#   - Obsidian vault 통합 (vault-helpers.sh: 읽기/쓰기/시맨틱 검색)
+#   - save_state() → vault state.md 자동 동기화
+#   - build_rag_context() → vault 시맨틱 검색 추가 (이전 세션 지식)
+#   - preflight() → vault 연결 확인 + graceful degradation
+#   - record_pattern() → vault에 패턴 기록
+#   - VAULT_ENABLED=false 기본값 (v2.x 하위 호환)
+#
+# v2.0.0 BASE:
 #   - fix_plan.md = READ-ONLY during loop execution
 #   - No local commits on main (workers create PRs on branches)
 #   - completed_wis.txt = Single source of truth
-#   - mark_wi_done() only writes to completed_wis.txt (no sed on fix_plan)
 #   - reconcile_fix_plan() syncs checkboxes at loop END only
-#   - safe_sync_main() uses fetch+reset (safe: no local commits on main)
-#   - Removed: sync_completed_file, check_wi_implemented, recover_stale_wis
 #==============================
 RALPH_VERSION="3.0.0"
 

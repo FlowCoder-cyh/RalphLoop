@@ -1,8 +1,6 @@
----
-description: "팀 역할 정의 — TEAM_NAME별 소유 디렉토리와 책임"
----
-
 # Team Roles (v3.0)
+
+팀 역할 참조 문서 — 서브에이전트(lead-workflow, team-worker)가 참조합니다.
 
 ## 역할 매핑
 
