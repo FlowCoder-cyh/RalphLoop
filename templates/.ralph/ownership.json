@@ -13,5 +13,15 @@
     ".gitignore",
     "CLAUDE.md",
     "prisma/schema.prisma"
-  ]
+  ],
+  "crossTeamReview": {
+    ".ralph/contracts/api-standard.md": ["frontend", "backend"],
+    ".ralph/contracts/data-flow.md": ["frontend", "backend", "qa"],
+    "prisma/schema.prisma": ["frontend", "backend"],
+    ".ralph/requirements.md": ["all"],
+    "src/components/shared/**": ["frontend", "backend"],
+    "src/components/common/**": ["frontend", "backend"],
+    "src/lib/shared/**": ["frontend", "backend"],
+    "src/types/**": ["frontend", "backend", "qa"]
+  }
 }
