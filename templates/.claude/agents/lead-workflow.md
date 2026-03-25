@@ -58,17 +58,30 @@ disallowedTools: Edit, Write
 - 기존 팀원이 없으면 → 아래 절차로 생성
 
 #### 신규 팀 생성 (팀원이 없을 때만)
-Agent Teams(상주 팀원)로 생성한다. **서브에이전트(Agent tool)로 spawn하지 않는다.**
 
-```
-에이전트 팀을 만들어줘.
-팀원:
-- {팀명} 팀: {WI 목록} 담당
+**2단계로 생성한다:**
 
-각 팀원은 시작 시:
-1. 팀 등록: mkdir -p .flowset/teams && echo "{팀명}" > .flowset/teams/$(echo $$).team
-2. .flowset/guides/team-worker-guide.md 읽고 초기화
+**Step 1: TeamCreate로 팀 생성**
 ```
+TeamCreate(team_name: "{프로젝트명}-{phase}")
+```
+
+**Step 2: Agent(team_name)로 팀원 소환**
+```
+Agent(
+  team_name: "{프로젝트명}-{phase}",
+  name: "{팀명}",
+  prompt: "당신은 {팀명} 팀원입니다.
+  .flowset/guides/team-worker-guide.md를 읽고 초기화하세요.
+  팀 등록: mkdir -p .flowset/teams && echo '{팀명}' > .flowset/teams/$(echo $$).team
+  할당 태스크: {WI 목록}"
+)
+```
+
+**주의:**
+- `TeamCreate` 없이 `Agent(team_name: ...)` 하면 에러
+- `Agent(subagent_type: ...)` 는 일회성 서브에이전트 — 팀원 생성에 사용 금지
+- 반드시 `TeamCreate` → `Agent(team_name)` 순서
 
 #### 기존 팀원에게 추가 작업 전달
 ```
