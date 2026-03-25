@@ -12,6 +12,38 @@ PATTERN="^WI-[0-9]{3,4}(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|
 PATTERN_SYSTEM="^WI-(chore|docs) .+"
 PATTERN_MERGE="^Merge "
 
+# FlowSet 필수 파일 존재 검증 (첫 커밋 시 누락 방지)
+REQUIRED_SCRIPTS=(
+  ".flowset/scripts/vault-helpers.sh"
+  ".flowset/scripts/check-ownership.sh"
+  ".flowset/scripts/check-cross-team-impact.sh"
+  ".flowset/scripts/session-start-vault.sh"
+  ".flowset/scripts/stop-rag-check.sh"
+  ".flowset/scripts/notify-contract-change.sh"
+  ".flowset/scripts/resolve-team.sh"
+  ".flowset/scripts/enqueue-pr.sh"
+  ".flowset/scripts/launch-loop.sh"
+  ".flowset/scripts/verify-requirements.sh"
+  ".flowset/scripts/rollback.sh"
+)
+missing=()
+for f in "${REQUIRED_SCRIPTS[@]}"; do
+  [[ ! -f "$f" ]] && missing+=("$f")
+done
+if [[ ${#missing[@]} -gt 0 ]]; then
+  echo ""
+  echo "  FlowSet 필수 스크립트 누락 (${#missing[@]}개)"
+  echo ""
+  for m in "${missing[@]}"; do
+    echo "  MISSING: $m"
+  done
+  echo ""
+  echo "  복사 명령:"
+  echo "  cp ~/.claude/templates/flowset/.flowset/scripts/* .flowset/scripts/"
+  echo ""
+  exit 1
+fi
+
 if [[ ! "$COMMIT_MSG" =~ $PATTERN && ! "$COMMIT_MSG" =~ $PATTERN_SYSTEM && ! "$COMMIT_MSG" =~ $PATTERN_MERGE ]]; then
   echo ""
   echo "  커밋 메시지 형식 오류"
