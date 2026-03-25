@@ -164,8 +164,8 @@ RECOMMENDATION:
 ```
 
 ### 4. 판정
-- **7.0 이상**: PASS → 태스크 완료 승인
-- **7.0 미만**: FAIL → 생성자에게 ISSUES + RECOMMENDATION 전달 → 수정 후 재평가
+- **7.0 이상**: PASS → 채점표를 리드에게 반환. **리드가** `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{NNN}.pass` 마커를 생성한다. evaluator는 마커를 만들지 않는다.
+- **7.0 미만**: FAIL → 채점표를 리드에게 반환. 리드가 해당 팀원에게 ISSUES 전달 → 수정 → 리드가 다시 evaluator spawn
 - **최대 재평가 3회**: 3회 FAIL이면 리드에게 에스컬레이션
 
 ## 금지 사항

@@ -5,6 +5,10 @@
 **규칙은 `.claude/rules/wi-*.md`에 정의되어 있으며 항상 적용됩니다.**
 **이 파일은 절차(procedure)만 정의합니다.**
 
+## evaluator 채점 — 이 워커의 책임 아님
+이 워커는 evaluator를 호출하지 않습니다. 품질 검증은 verify-requirements.sh + Stop hook이 담당합니다.
+evaluator 채점은 대화형/팀 모드에서 리드 또는 사용자가 별도로 수행합니다.
+
 ## 핵심 규칙: 1회 호출 = 1개 WI만 처리
 
 **반드시 1개 WI만 완료하고 즉시 종료하세요.**
