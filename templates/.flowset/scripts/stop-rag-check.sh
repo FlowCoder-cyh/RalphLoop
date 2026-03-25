@@ -109,8 +109,21 @@ if [[ -f ".flowsetrc" ]]; then
     # 모드 감지
     mode=$(vault_detect_mode 2>/dev/null || echo "interactive")
 
-    # A. 세션 로그 저장 (전 모드 공통)
-    vault_save_session_log "$summary" "${change_summary:-none}" "${#issues[@]}" 2>/dev/null || true
+    # A. 세션 로그 저장 (변경 있을 때만, 일별 통합, 5분 쿨다운)
+    _should_log=false
+    if [[ -n "$change_summary" && "$change_summary" != "none" ]] || [[ ${#issues[@]} -gt 0 ]]; then
+      _cooldown_file="/tmp/.vault_session_cooldown_$$_${VAULT_PROJECT_NAME:-flowset}"
+      _now=$(date +%s)
+      _last=0
+      [[ -f "$_cooldown_file" ]] && _last=$(cat "$_cooldown_file" 2>/dev/null || echo 0)
+      if [[ $(( _now - _last )) -ge 300 ]]; then
+        _should_log=true
+        echo "$_now" > "$_cooldown_file"
+      fi
+    fi
+    if [[ "$_should_log" == "true" ]]; then
+      vault_save_daily_session_log "$summary" "${change_summary:-none}" "${#issues[@]}" 2>/dev/null || true
+    fi
 
     # B. state.md 업데이트 (대화형/팀만 — 루프는 flowset.sh가 관리)
     if [[ "$mode" != "loop" ]]; then
