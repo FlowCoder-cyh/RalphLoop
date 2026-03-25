@@ -60,35 +60,50 @@ disallowedTools: Edit, Write
 **중요**: 스프린트 계약이 있는 WI는 TaskCompleted hook이 평가자 검증을 강제합니다.
 계약 없는 WI는 기존처럼 자유롭게 완료 가능.
 
-### 4단계: 팀원 Spawn
-각 팀원은 Agent tool의 team-worker 서브에이전트로 spawn합니다:
+### 4단계: Agent Teams 팀 생성
+
+**서브에이전트(일회성)가 아닌 Agent Teams(상주 팀원)로 생성합니다.**
+
+자연어로 팀 생성을 요청합니다:
 ```
-Agent(
-  description: "{팀명} 팀 작업",
-  prompt: "당신은 {TEAM_NAME} 팀원입니다.
-  할당된 태스크: {태스크 목록}
-  소유 디렉토리: {ownership.json의 해당 팀 경로}",
-  subagent_type: "team-worker"
-)
+에이전트 팀을 만들어줘.
+팀원 구성:
+- character 팀: WI-001, WI-002 담당. 소유 디렉토리: production/characters/**, production/prompts/characters/**
+- visual 팀: WI-003 담당. 소유 디렉토리: production/episodes/**, production/prompts/scenes/**
+
+각 팀원은 .claude/agents/team-worker.md를 읽고 초기화.
+팀원은 세션 내내 유지되며, 태스크를 공유 리스트에서 claim하여 작업.
 ```
+
+**Agent Teams vs 서브에이전트 차이:**
+| | 서브에이전트 | Agent Teams (이 방식) |
+|---|---|---|
+| 수명 | 태스크 1개 → 종료 | 세션 내내 유지 |
+| 소통 | 결과만 반환 | 팀원 간 직접 메시징 |
+| 태스크 | 호출 시 지정 | 공유 리스트에서 self-claim |
+| 컨텍스트 | 매번 새로 시작 | 이전 작업 맥락 누적 |
+
+**팀원에게 전달할 컨텍스트:**
+- `.claude/agents/team-worker.md` — 역할 + 초기화 절차
+- `.claude/rules/team-roles.md` — 팀 역할 정의
+- `.flowset/contracts/sprint-{NNN}.md` — 해당 WI 스프린트 계약
+- `.flowset/ownership.json` — 소유 디렉토리 매핑
 
 ### 5단계: 평가자 검증 + 결과 통합
 
-팀원이 태스크를 완료하면 **evaluator 서브에이전트**로 채점합니다:
+팀원이 태스크를 완료하면 **evaluator 서브에이전트**로 채점합니다.
+(evaluator는 일회성 채점이므로 서브에이전트가 적합)
 
 ```
-Agent(
-  description: "WI-{NNN} 평가",
-  prompt: "스프린트 계약 .flowset/contracts/sprint-{NNN}.md 기준으로 채점하세요.
-  생성자가 수정한 파일: {변경 파일 목록}",
-  subagent_type: "evaluator"
-)
+evaluator 서브에이전트로 WI-{NNN}을 평가해줘.
+스프린트 계약: .flowset/contracts/sprint-{NNN}.md
+변경 파일: {변경 파일 목록}
 ```
 
 **평가 루프:**
 1. evaluator가 채점표(EVAL_RESULT) 반환
 2. PASS (7.0+) → `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{NNN}.pass` → 태스크 완료
-3. FAIL (<7.0) → ISSUES를 생성자에게 전달 → 수정 → 재평가 (최대 3회)
+3. FAIL (<7.0) → ISSUES를 해당 팀원에게 직접 메시지 → 수정 → 재평가 (최대 3회)
 4. 3회 FAIL → 리드가 직접 판단 또는 사용자에게 에스컬레이션
 
 **결과 통합:**
