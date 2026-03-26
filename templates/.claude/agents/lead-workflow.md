@@ -73,7 +73,7 @@ Agent(
   name: "{팀명}",
   prompt: "당신은 {팀명} 팀원입니다.
   .flowset/guides/team-worker-guide.md를 읽고 초기화하세요.
-  팀 등록: mkdir -p .flowset/teams && echo '{팀명}' > .flowset/teams/$(echo $$).team
+  팀 등록: mkdir -p .flowset/teams && echo 'registered' > .flowset/teams/{팀명}.team
   할당 태스크: {WI 목록}"
 )
 ```
