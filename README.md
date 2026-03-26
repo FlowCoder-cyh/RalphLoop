@@ -172,14 +172,22 @@ FlowSet/
     ├── .flowset/
     │   ├── PROMPT.md   # AI 지시서 (TDD, 머지 대기, 와이어프레임 참조)
     │   ├── AGENT.md    # 빌드 명령 + 인프라 + 와이어프레임 + 계약
-    │   ├── contracts/  # 팀 간 계약 (API 표준, 데이터 흐름) [v3.0]
-    │   ├── ownership.json # 팀별 소유 디렉토리 매핑 [v3.0]
-    │   ├── hooks/      # Git hooks (commit-msg, pre-push)
-    │   └── scripts/    # enqueue-pr, launch-loop, verify-requirements, stop-rag-check, check-ownership, vault-helpers [v3.0]
+    │   ├── contracts/  # 팀 간 계약 + 스프린트 계약
+    │   │   ├── api-standard.md    # API 응답 형식 계약
+    │   │   ├── data-flow.md       # SSOT 데이터 흐름 계약
+    │   │   └── sprint-template.md # 스프린트 계약 템플릿 (수용 기준 + 검증 방법)
+    │   ├── guides/
+    │   │   └── team-worker-guide.md # Agent Teams 팀원 초기화 가이드
+    │   ├── ownership.json # 팀별 소유 디렉토리 매핑
+    │   ├── tech-debt.md   # 기술부채 등록 (P0/P1/P2)
+    │   ├── hooks/      # Git hooks (commit-msg + 필수 스크립트 검증, pre-push)
+    │   └── scripts/    # vault-helpers, session-start-vault, stop-rag-check, check-ownership, check-cross-team-impact, notify-contract-change, resolve-team, task-completed-eval, verify-requirements, enqueue-pr, launch-loop, rollback
     ├── .claude/
-    │   ├── agents/     # Agent Teams 팀 역할 정의 [v3.0]
-    │   ├── rules/      # 운영 규칙 + 코드 품질 (자동 로드)
-    │   └── settings.json # PreToolUse + Stop hook 등록
+    │   ├── agents/
+    │   │   ├── lead-workflow.md  # 리드 6단계 (TeamCreate→Agent Teams→evaluator→정리)
+    │   │   └── evaluator.md     # 평가자 (채점 기반, few-shot, 안티패턴 감점)
+    │   ├── rules/      # 운영 규칙 + 팀 역할 정의
+    │   └── settings.json # SessionStart + PreToolUse + PostToolUse + TaskCompleted + Stop hook
     ├── .github/
     │   └── workflows/  # ci.yml, commit-check.yml, e2e.yml
     └── .flowsetrc        # 루프 설정 (+ vault 연동 [v3.0])
@@ -218,16 +226,17 @@ bash flowset.sh
 ### 핵심 설계 원칙
 
 - **요구사항 보호**: requirements.md에 사용자 원본 고정, 에이전트 수정 금지
-- **구현-검증 분리**: 구현 에이전트(Write 가능)와 검증 에이전트(Read만) 분리
+- **생성자-평가자 분리**: 구현(team-worker)과 평가(evaluator)를 별도 에이전트로 분리. 자기 객관화 실패 방지.
+- **스프린트 계약**: WI별 수용 기준 + 검증 방법을 사전 합의. 합의 전 구현 금지.
+- **채점 기반 평가**: 0~10점, 4대 기준(기능/품질/테스트/계약 or 디자인/독창성/기술/정확성), few-shot 캘리브레이션, 안티패턴 감점
+- **Agent Teams 상주 팀원**: TeamCreate → Agent(team_name)로 생성. 기존 팀원 재사용 필수, 중복 생성 금지.
+- **소유권 hook 강제**: 팀별 디렉토리 제한 (PreToolUse), 계약/스키마 변경 차단 (cross-team)
+- **vault 세션 연속성**: Obsidian vault에 state + 일별 세션 로그 + 팀 상태 자동 기록. SessionStart에서 자동 주입.
 - **머지 대기**: PR 머지 완료까지 대기 후 다음 WI (stale base 방지)
-- **와이어프레임 필수**: PRD 확정 전 UI 사전 확인 (data-testid 포함)
-- **아키텍처 계약**: API 표준 + SSOT 데이터 흐름 자동 생성
 - **TDD 강제**: 테스트 먼저 작성 → 구현
 - **RAG 강제**: Stop hook + validate로 자동 감지 + 업데이트 강제
-- **자동 검증**: scope creep, 빈 구현, API 형식, E2E 품질 자동 감지
 - **fix_plan.md 읽기 전용**: completed_wis.txt가 SSOT
 - **regression 자동화**: e2e 실패 → issue → WI-NNN-1-fix → 자동 재실행
-- **circuit breaker**: 3회 연속 진행 없으면 자동 중지
 
 ### 커스터마이징
 
