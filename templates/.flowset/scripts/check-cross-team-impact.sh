@@ -10,14 +10,9 @@ export LC_ALL=en_US.UTF-8
 # stdin에서 hook 입력 읽기
 INPUT=$(cat 2>/dev/null || true)
 
-# TEAM_NAME 해소 (환경변수 → 파일 폴백)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/resolve-team.sh" 2>/dev/null || true
-resolve_team_name "$INPUT"
-TEAM_NAME="$RESOLVED_TEAM_NAME"
-
-# TEAM_NAME 미설정이면 pass (solo 모드)
-if [[ -z "$TEAM_NAME" ]]; then
+# TEAM_NAME 해소 — 환경변수만 사용 (파일 폴백 금지)
+# 이유: 리드 세션에서 .team 파일을 읽으면 리드를 팀원으로 오인식
+if [[ -z "${TEAM_NAME:-}" ]]; then
   exit 0
 fi
 
