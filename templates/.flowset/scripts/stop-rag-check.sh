@@ -87,12 +87,13 @@ if [[ -f ".flowsetrc" ]]; then
     # vault-helpers.sh 로드
     [[ -f ".flowset/scripts/vault-helpers.sh" ]] && source .flowset/scripts/vault-helpers.sh 2>/dev/null || true
 
-    # last_assistant_message에서 작업 요약 추출 (처음 500자)
+    # --- transcript 추출 (v3.4 — vault-helpers.sh 함수) ---
+    transcript_path=$(echo "$INPUT" | jq -r '.transcript_path // ""' 2>/dev/null || echo "")
     last_msg=$(echo "$INPUT" | jq -r '.last_assistant_message // ""' 2>/dev/null || echo "")
-    summary=""
-    if [[ -n "$last_msg" ]]; then
-      summary=$(printf '%.500s' "$last_msg" | tr '\n' ' ' | tr '\r' ' ')
-    fi
+
+    vault_extract_transcript "$transcript_path"
+    vault_build_transcript_summary "$last_msg"
+    summary="$TRANSCRIPT_SUMMARY"
 
     # 변경 파일 요약
     change_summary=$(echo "$changed_files" | sed '/^$/d' | sort -u | head -20 | tr '\n' ', ')
@@ -125,9 +126,10 @@ if [[ -f ".flowsetrc" ]]; then
       vault_save_daily_session_log "$summary" "${change_summary:-none}" "${#issues[@]}" 2>/dev/null || true
     fi
 
-    # B. state.md 업데이트 (대화형/팀만 — 루프는 flowset.sh가 관리)
+    # B. 구조화된 state.md 업데이트 (대화형/팀만 — 루프는 flowset.sh가 관리)
     if [[ "$mode" != "loop" ]]; then
-      vault_sync_state "idle" "" "" "" "" "$summary" "$local_team" 2>/dev/null || true
+      vault_build_state_content "${VAULT_PROJECT_NAME:-project}" "$mode" "$local_team" "${change_summary}" "$last_msg"
+      vault_write "${VAULT_PROJECT_NAME:-project}/state.md" "$TRANSCRIPT_STATE_CONTENT" 2>/dev/null || true
     fi
 
     # C. 팀 state 업데이트 (팀 모드만)

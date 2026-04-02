@@ -38,6 +38,9 @@ if [[ -z "$file_path" ]]; then
   exit 0
 fi
 
+# null byte, newline, 제어문자 제거 (context poisoning 방어)
+file_path=$(printf '%s' "$file_path" | tr -d '\0\n\r' | tr -d '[:cntrl:]')
+
 # 상대 경로로 정규화
 cwd=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 if [[ -n "$cwd" && "$file_path" == "$cwd/"* ]]; then
