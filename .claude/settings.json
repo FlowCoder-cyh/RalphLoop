@@ -20,7 +20,7 @@
           {
             "type": "command",
             "command": "bash .flowset/scripts/stop-vault-sync.sh",
-            "timeout": 30
+            "timeout": 120
           }
         ]
       }

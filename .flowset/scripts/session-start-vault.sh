@@ -121,5 +121,8 @@ if [[ -z "$context" ]]; then
   exit 0
 fi
 
+# cch attestation 문자열 sanitize (캐시 무효화 방지)
+context=$(echo "$context" | sed 's/cch=[a-f0-9]\{4,\}/cch=REDACTED/g')
+
 # additionalContext로 반환
 jq -n --arg ctx "$context" '{"additionalContext": $ctx}'

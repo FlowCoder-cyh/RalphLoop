@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# stop-vault-sync.sh — Stop hook (settings 저장소 전용)
-# RAG/E2E/requirements 검증 없이 vault 세션 저장만 수행
-# 대상: 템플릿 저장소처럼 소스 코드 프로젝트가 아닌 저장소
+# stop-vault-sync.sh — Stop hook (v3.4)
+# 세션 종료 시 transcript에서 작업 내역 추출 + vault 저장
+# Claude Code 유출 분석 기반 개선: transcript_path 활용, 구조화된 state.md
+# 핵심 로직은 vault-helpers.sh의 vault_extract_transcript/vault_build_* 함수 사용
 
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
@@ -23,22 +24,25 @@ fi
 
 [[ -f ".flowset/scripts/vault-helpers.sh" ]] && source .flowset/scripts/vault-helpers.sh 2>/dev/null || true
 
-# last_assistant_message에서 작업 요약 추출 (처음 500자)
+# --- 1. 기본 정보 추출 ---
 last_msg=$(echo "$INPUT" | jq -r '.last_assistant_message // ""' 2>/dev/null || echo "")
-summary=""
-if [[ -n "$last_msg" ]]; then
-  summary=$(printf '%.500s' "$last_msg" | tr '\n' ' ' | tr '\r' ' ')
-fi
+transcript_path=$(echo "$INPUT" | jq -r '.transcript_path // ""' 2>/dev/null || echo "")
 
-# 변경 파일
+# --- 2. transcript 추출 (vault-helpers.sh 함수) ---
+vault_extract_transcript "$transcript_path"
+
+# --- 3. 변경 파일 ---
 changed_files=$(git diff --name-only HEAD 2>/dev/null || true)
 change_summary=$(echo "$changed_files" | sed '/^$/d' | sort -u | head -20 | tr '\n' ', ')
 change_summary="${change_summary%,}"
 
-# 세션 로그 저장
-vault_save_session_log "$summary" "${change_summary:-none}" "0" 2>/dev/null || true
+# --- 4. 구조화된 요약 생성 (vault-helpers.sh 함수) ---
+vault_build_transcript_summary "$last_msg"
 
-# state.md 업데이트
-vault_sync_state "idle" "" "" "" "" "$summary" "" 2>/dev/null || true
+# --- 5. vault 저장 ---
+vault_save_daily_session_log "$TRANSCRIPT_SUMMARY" "${change_summary:-none}" "0" 2>/dev/null || true
+
+vault_build_state_content "${VAULT_PROJECT_NAME:-project}" "interactive" "" "${change_summary}" "$last_msg"
+vault_write "${VAULT_PROJECT_NAME:-project}/state.md" "$TRANSCRIPT_STATE_CONTENT" 2>/dev/null || true
 
 exit 0

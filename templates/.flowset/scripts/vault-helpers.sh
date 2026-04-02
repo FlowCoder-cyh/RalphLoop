@@ -339,3 +339,85 @@ vault_check_tech_debt() {
   fi
   return 0
 }
+
+# transcript JSONL에서 세션 정보 기계적 추출 (v3.4)
+# $1: transcript_path
+# 결과: TRANSCRIPT_SESSION_START, TRANSCRIPT_COMMITS, TRANSCRIPT_PRS, TRANSCRIPT_TOOL_COUNT
+# + TRANSCRIPT_RECENT_COMMITS (git log 기반)
+vault_extract_transcript() {
+  local transcript_path="${1:-}"
+
+  TRANSCRIPT_SESSION_START=""
+  TRANSCRIPT_COMMITS=""
+  TRANSCRIPT_PRS=""
+  TRANSCRIPT_TOOL_COUNT="0"
+  TRANSCRIPT_RECENT_COMMITS=""
+
+  if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
+    TRANSCRIPT_SESSION_START=$(head -1 "$transcript_path" | jq -r '.timestamp // empty' 2>/dev/null)
+    TRANSCRIPT_COMMITS=$(grep -oP 'WI-\d{3,4}(-\d+)?-\w+ [^"\\\\]+' "$transcript_path" 2>/dev/null | sort -u | head -15)
+    TRANSCRIPT_PRS=$(grep -oP 'gh pr create[^"\\\\]*' "$transcript_path" 2>/dev/null | sort -u | head -5)
+    TRANSCRIPT_TOOL_COUNT=$(grep -c '"type":"tool_use"' "$transcript_path" 2>/dev/null || echo "0")
+  fi
+
+  if [[ -n "$TRANSCRIPT_SESSION_START" ]]; then
+    TRANSCRIPT_RECENT_COMMITS=$(git log --oneline --since="$TRANSCRIPT_SESSION_START" 2>/dev/null | head -15)
+  fi
+  if [[ -z "$TRANSCRIPT_RECENT_COMMITS" ]]; then
+    TRANSCRIPT_RECENT_COMMITS=$(git log --oneline --since="2 hours ago" 2>/dev/null | head -15)
+  fi
+}
+
+# transcript 추출 결과 → 구조화된 요약 문자열 (v3.4)
+# $1: last_assistant_message (optional)
+# 결과: TRANSCRIPT_SUMMARY
+vault_build_transcript_summary() {
+  local last_msg="${1:-}"
+  local branch
+  branch=$(git branch --show-current 2>/dev/null || echo "unknown")
+
+  TRANSCRIPT_SUMMARY="Branch: ${branch}"
+  [[ -n "$TRANSCRIPT_RECENT_COMMITS" ]] && TRANSCRIPT_SUMMARY+=$'\n'"Commits:"$'\n'"${TRANSCRIPT_RECENT_COMMITS}"
+  [[ -n "$TRANSCRIPT_PRS" ]] && TRANSCRIPT_SUMMARY+=$'\n'"PRs: ${TRANSCRIPT_PRS}"
+  [[ -n "$TRANSCRIPT_TOOL_COUNT" && "$TRANSCRIPT_TOOL_COUNT" -gt 0 ]] 2>/dev/null && \
+    TRANSCRIPT_SUMMARY+=$'\n'"Tool calls: ${TRANSCRIPT_TOOL_COUNT}"
+
+  if [[ -n "$last_msg" ]]; then
+    local short_last
+    short_last=$(printf '%.200s' "$last_msg" | tr '\n' ' ' | tr '\r' ' ')
+    TRANSCRIPT_SUMMARY+=$'\n'"Last msg: ${short_last}"
+  fi
+}
+
+# transcript 추출 결과 → 구조화된 state.md (v3.4)
+# $1: project_name, $2: mode, $3: team_name, $4: change_summary, $5: last_msg
+# 결과: TRANSCRIPT_STATE_CONTENT
+vault_build_state_content() {
+  local project_name="${1:-project}"
+  local mode="${2:-interactive}"
+  local team_name="${3:-}"
+  local change_summary="${4:-}"
+  local last_msg="${5:-}"
+  local branch
+  branch=$(git branch --show-current 2>/dev/null || echo "unknown")
+  local ts
+  ts=$(date '+%Y-%m-%d %H:%M:%S')
+
+  TRANSCRIPT_STATE_CONTENT="# ${project_name} State
+- Status: idle
+- Branch: ${branch}
+- Updated: ${ts}
+- Mode: ${mode}"
+
+  [[ -n "$team_name" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n'"- Team: ${team_name}"
+  [[ -n "$TRANSCRIPT_SESSION_START" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n'"- Session: ${TRANSCRIPT_SESSION_START} ~ ${ts}"
+  [[ -n "$TRANSCRIPT_RECENT_COMMITS" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## Commits This Session"$'\n'"${TRANSCRIPT_RECENT_COMMITS}"
+  [[ -n "$TRANSCRIPT_PRS" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## PRs This Session"$'\n'"${TRANSCRIPT_PRS}"
+  [[ -n "$change_summary" && "$change_summary" != "none" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## Changed Files"$'\n'"${change_summary}"
+
+  if [[ -n "$last_msg" ]]; then
+    local short
+    short=$(printf '%.300s' "$last_msg" | tr '\n' ' ' | tr '\r' ' ')
+    TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## Last Activity"$'\n'"${short}"
+  fi
+}
