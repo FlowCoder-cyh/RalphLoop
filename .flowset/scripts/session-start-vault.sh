@@ -58,22 +58,8 @@ ${state_content}
   fi
 fi
 
-# --- 2. 최근 세션 로그 1건 읽기 ---
-if [[ -n "${VAULT_PROJECT_NAME:-}" ]]; then
-  session_results=$(_vsearch "${VAULT_PROJECT_NAME} session")
-  if [[ -n "$session_results" && "$session_results" != "[]" ]]; then
-    latest_file=$(echo "$session_results" | jq -r '[.[] | select(.filename | test("sessions/"))] | .[0].filename // empty' 2>/dev/null)
-    if [[ -n "$latest_file" ]]; then
-      session_content=$(_vread "$latest_file" | head -30)
-      if [[ -n "$session_content" && "$session_content" != *'"errorCode"'* ]]; then
-        context+="
-[VAULT LAST SESSION — 이전 세션 작업 내역]
-${session_content}
-"
-      fi
-    fi
-  fi
-fi
+# --- 2. 세션 로그는 주입하지 않음 (토큰 누적 방지) ---
+# 상세 내역이 필요하면 state.md의 포인터를 따라 직접 읽을 것
 
 # --- 3. 팀 모드: 팀별 state 로드 ---
 team_name=""

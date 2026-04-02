@@ -415,9 +415,7 @@ vault_build_state_content() {
   [[ -n "$TRANSCRIPT_PRS" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## PRs This Session"$'\n'"${TRANSCRIPT_PRS}"
   [[ -n "$change_summary" && "$change_summary" != "none" ]] && TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## Changed Files"$'\n'"${change_summary}"
 
-  if [[ -n "$last_msg" ]]; then
-    local short
-    short=$(printf '%.300s' "$last_msg" | tr '\n' ' ' | tr '\r' ' ')
-    TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## Last Activity"$'\n'"${short}"
-  fi
+  local today
+  today=$(date '+%Y%m%d')
+  TRANSCRIPT_STATE_CONTENT+=$'\n\n'"## Last Activity"$'\n'"상세 내역: sessions/${today}-daily.md 참조"
 }
