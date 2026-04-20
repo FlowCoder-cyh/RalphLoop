@@ -55,6 +55,24 @@ if [[ -f .flowset/scripts/vault-helpers.sh ]]; then
   source .flowset/scripts/vault-helpers.sh
 fi
 
+# v4.0 WI-A2a: 런타임 state 라이브러리 (lib/state.sh)
+# 있으면 병렬 안전 파일 기반 state 관리, 없으면 전역변수 shim 폴백 (v3.x 호환)
+# 후속 WI-A2b~e에서 나머지 함수 내 $loop_count 등 직접 참조를 state_get/set으로 점진 전환
+if [[ -f lib/state.sh ]]; then
+  source lib/state.sh
+else
+  # fallback shim — lib/state.sh 없는 기존 프로젝트에서 save/restore_state가 작동하도록
+  # state_get KEY → 전역변수 $KEY 값 echo (없으면 빈 문자열)
+  # state_set KEY VAL → 전역변수 $KEY = VAL 할당
+  # 보안 주: KEY는 반드시 RUNTIME_STATE_KEYS 8개(영문+언더스코어) 이름만 전달.
+  #        사용자 입력을 KEY로 직접 주입 금지(eval 취약점 방지). 값(VAL)은 인용 처리됨.
+  state_get() { local k="${1:-}"; [[ -z "$k" ]] && return 0; eval "printf '%s' \"\${$k:-}\""; }
+  state_set() { local k="${1:-}" v="${2:-}"; [[ -z "$k" ]] && return 1; eval "$k=\"\$v\""; }
+  state_init() { :; }  # 전역변수는 이미 선언됨 (:82-93)
+  state_snapshot() { :; }
+  state_restore() { :; }
+fi
+
 # Defaults (위에서 .flowsetrc가 설정하지 않은 값만 적용)
 # MAX_ITERATIONS: fix_plan의 전체 WI 수 + 20% 여유 (검증 재시도 감안)
 FIX_PLAN="${FIX_PLAN:-.flowset/fix_plan.md}"
@@ -99,27 +117,41 @@ STATE_FILE=".flowset/loop_state.json"
 # fix_plan은 READ-ONLY. 이 파일이 유일한 진실의 원천(SSOT)
 COMPLETED_FILE=".flowset/completed_wis.txt"
 
+# v4.0 WI-A2a: 런타임 state 초기화 + 전역변수 → state 동기화
+# lib/state.sh가 있으면 파일 기반 격리 활성, 없으면 shim(전역변수 그대로) 동작
+state_init
+state_set call_count "$call_count"
+state_set loop_count "$loop_count"
+state_set consecutive_no_progress "$consecutive_no_progress"
+state_set last_git_sha "$last_git_sha"
+state_set last_commit_msg "$last_commit_msg"
+state_set rate_limit_start "$rate_limit_start"
+state_set current_session_id "$current_session_id"
+state_set total_cost_usd "$total_cost_usd"
+
 #==============================
 # Section 2: STATE MANAGEMENT
 #==============================
 
 save_state() {
+  # v4.0 WI-A2a: 변수 참조를 state_get 호출로 전환 (lib/state.sh 시 병렬 안전)
+  # lib/state.sh 없는 환경은 shim이 전역변수 값을 그대로 반환하여 기능 동등
   cat > "$STATE_FILE" <<EOF
 {
-  "loop_count": $loop_count,
-  "call_count": $call_count,
-  "session_id": "$current_session_id",
-  "total_cost_usd": $total_cost_usd,
-  "last_git_sha": "$last_git_sha",
+  "loop_count": $(state_get loop_count),
+  "call_count": $(state_get call_count),
+  "session_id": "$(state_get current_session_id)",
+  "total_cost_usd": $(state_get total_cost_usd),
+  "last_git_sha": "$(state_get last_git_sha)",
   "timestamp": "$(date '+%Y-%m-%d %H:%M:%S')",
   "status": "${1:-running}"
 }
 EOF
 
-  # v3.0: vault state 동기화
+  # v3.0: vault state 동기화 (변수 참조 → state_get 호출 동일 전환)
   local completed_count
   completed_count=$(wc -l < "$COMPLETED_FILE" 2>/dev/null || echo "0")
-  vault_sync_state "${1:-running}" "$loop_count" "$MAX_ITERATIONS" "$completed_count" "$total_cost_usd"
+  vault_sync_state "${1:-running}" "$(state_get loop_count)" "$MAX_ITERATIONS" "$completed_count" "$(state_get total_cost_usd)"
 }
 
 restore_state() {
@@ -143,18 +175,23 @@ restore_state() {
         log "🔀 마지막 실행 이후 코드 변경 감지 (수동 작업 있음)"
         log "   이전 세션 무효화 → 새 세션으로 시작합니다"
         current_session_id=""
+        state_set current_session_id ""
       else
         # 코드 변경 없음 → 이전 세션 재활용 가능
         local prev_session
         prev_session=$(jq -r '.session_id // ""' "$STATE_FILE" 2>/dev/null || echo "")
         if [[ -n "$prev_session" ]]; then
           current_session_id="$prev_session"
+          state_set current_session_id "$prev_session"
           log "🔄 이전 세션 복구: ${prev_session:0:8}..."
         fi
       fi
 
       log "📋 completed_wis.txt + fix_plan.md 기준으로 미완료 WI부터 재개합니다"
       total_cost_usd=$prev_cost
+      state_set total_cost_usd "$prev_cost"
+      state_set last_git_sha "$prev_sha"
+      state_set loop_count "$prev_loop"
     elif [[ "$prev_status" == "completed" ]]; then
       log "✅ 이전 실행 정상 완료됨. 새로 시작합니다."
     fi
