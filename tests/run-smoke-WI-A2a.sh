@@ -195,8 +195,9 @@ fi
 echo ""
 echo "=== A2a-11: iteration_cost/total_context_tokens 제외 근거 검증 ==="
 # 설계 §11 line 441: "iteration_cost, total_context_tokens는 execute_claude() 지역변수(:1662, :1667)이므로 이관 대상 아님"
-# → flowset.sh에서 해당 변수가 local 선언되는지 확인
-if grep -qE '^\s+local\s+(iteration_cost|total_context_tokens|new_session_id\s+iteration_cost)' templates/flowset.sh; then
+# → execute_claude()가 정의된 파일에서 local 선언 확인
+# WI-A2c 이후: execute_claude가 templates/lib/worker.sh로 이관되었으므로 검색 범위 확장
+if grep -rqE '^\s+local\s+(iteration_cost|total_context_tokens|new_session_id\s+iteration_cost)' templates/flowset.sh templates/lib/ 2>/dev/null; then
   pass "iteration_cost/total_context_tokens 지역변수 선언 확인 (state 이관 대상 아님)"
 else
   fail "지역변수 선언 누락 (설계 §11 라인 441 근거 깨짐)"
