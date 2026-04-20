@@ -21,12 +21,20 @@ WI-A2b 변경사항이 WI-A1 + WI-A2a 기준선을 깨뜨리지 않고, `preflig
 
 이유: `preflight()`는 코드 200줄 규모로 기능 등가 shim 작성이 비현실적. 축소 fallback은 의미 없음(preflight의 본질은 전체 검증). **v3.x 프로젝트 업그레이드 시 `/wi:init` 재실행 필수**를 명시적으로 요구.
 
-### flowset.sh 이관 효과
+### flowset.sh 이관 효과 (누적 추적)
 
-- **이관 전**: flowset.sh 1947줄 (preflight 약 130줄 포함)
-- **이관 후**: flowset.sh **1882줄** (-65줄). lib/preflight.sh 163줄 신설
+| 시점 | flowset.sh 라인 | 변동 | 사유 |
+|------|---------------|------|------|
+| 설계 원본 (v3.4 base) | 1947 | — | 기준선 |
+| WI-A2a 후 | 1998 | +51 | state.sh source + shim fallback + state_init 호출 추가 |
+| **WI-A2b 후** | **1882** | **-116** | preflight() 130줄 제거 → lib/preflight.sh 163줄 신설 |
+| WI-A2c 예상 | ~1700 | -180 예상 | execute_claude + 관련 함수 이관 |
+| WI-A2d 예상 | ~1550 | -150 예상 | merge 3함수 이관 |
+| WI-A2e 예상 | ~1400 | -150 예상 | vault 함수 이관 + 이중 기록 제거 |
 
-**이관 효과 자동 감지**: Smoke A2b-7이 `flowset.sh < 1900줄` 자동 검증.
+**설계 §7 라인 범위 주의**: 설계 §7의 "flowset.sh:385-508 preflight()"는 **설계 작성 시점(v3.4 base) 기준**. WI-A2a 직후 실제 preflight() 위치는 `:422-553`이었고 WI-A2b에서 그 위치에서 이관됨. 설계 문서의 라인 번호는 stale될 수 있으므로 후속 WI-A2c/d/e도 실제 위치를 재확인 후 진행.
+
+**이관 효과 자동 감지**: Smoke A2b-7이 `flowset.sh < 1998(WI-A2a 후)` 및 **감소량 ≥ 100줄** 조건으로 자동 검증. 단순 `< 1900` 절대값이 아닌 **이전 단계 대비 감소량**으로 회귀 방지 강화.
 
 ---
 

@@ -110,14 +110,19 @@ else
 fi
 
 echo ""
-echo "=== A2b-7: flowset.sh 라인 수 감소 (이관 효과) ==="
-# preflight 이관(약 130줄)으로 flowset.sh가 감소했는지
-# main은 sh 1947줄 → 이관 후 1800줄 이하 기대
+echo "=== A2b-7: flowset.sh 라인 수 이관 효과 검증 ==="
+# 이관 효과 기준점 (lib/ 모듈 분리 누적 추적):
+#   설계 원본:  1947 (v3.4 base)
+#   WI-A2a 후:  1998 (+51, state.sh source + shim + state_init 추가)
+#   WI-A2b 후:  1882 (-116, preflight() 130줄 제거 → lib/preflight.sh로 이관)
+# 후속 WI-A2c(worker.sh)/A2d(merge.sh)/A2e(vault.sh) 이관 시 계속 감소 예상
 line_count=$(wc -l < templates/flowset.sh)
-if (( line_count < 1900 )); then
-  pass "flowset.sh $line_count 줄 (preflight 이관으로 감소)"
+prev_wi_a2a=1998
+delta=$((prev_wi_a2a - line_count))
+if (( line_count < prev_wi_a2a )) && (( delta >= 100 )); then
+  pass "flowset.sh $line_count 줄 (WI-A2a 후 $prev_wi_a2a 대비 -${delta}줄, preflight 이관 효과)"
 else
-  fail "flowset.sh $line_count 줄 (이관 효과 부족)"
+  fail "flowset.sh $line_count 줄 (WI-A2a 후 $prev_wi_a2a 대비 -${delta}줄, 이관 효과 100줄 미만)"
 fi
 
 echo ""
