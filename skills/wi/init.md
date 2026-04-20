@@ -105,9 +105,11 @@ cp "$TEMPLATE_DIR/.gitattributes" ./.gitattributes
 cp "$TEMPLATE_DIR/.editorconfig" ./.editorconfig
 cp "$TEMPLATE_DIR/CLAUDE.md" ./CLAUDE.md
 
-# v4.0 WI-A2a: lib/ 런타임 라이브러리 복사 (state.sh 등)
+# v4.0 WI-A2a~e: lib/ 런타임 라이브러리 복사
+# state.sh (WI-A2a) + preflight.sh (WI-A2b). 향후 worker/merge/vault 모듈 추가 예정.
 mkdir -p ./lib
 cp "$TEMPLATE_DIR/lib/state.sh" ./lib/state.sh
+cp "$TEMPLATE_DIR/lib/preflight.sh" ./lib/preflight.sh
 
 # .flowset/ 내부 파일 복사 (디렉토리는 이미 Step 3에서 생성됨)
 cp "$TEMPLATE_DIR/.flowset/PROMPT.md" ./.flowset/PROMPT.md
