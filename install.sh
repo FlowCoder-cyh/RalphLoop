@@ -127,9 +127,24 @@ else
 fi
 
 if command -v bats &> /dev/null; then
-  echo "  ✅ bats $(bats --version 2>&1 | head -1)"
+  echo "  ✅ bats $(bats --version 2>&1 | head -1) (system-wide)"
 else
-  echo "  ℹ️  bats 미설치 (개발용, 선택). tests/ 실행에 필요"
+  echo "  ℹ️  bats 시스템 전역 미설치 (tests/bats submodule 사용)"
+fi
+
+# v4.0 WI-A3: bats-core submodule 초기화 (FlowSet 저장소 자체 개발자용)
+# 다운스트림 프로젝트(/wi:init 대상)는 무관 — tests/bats/는 templates/에 복사되지 않음
+if [[ -f "$SCRIPT_DIR/.gitmodules" ]] && grep -q 'tests/bats' "$SCRIPT_DIR/.gitmodules"; then
+  if [[ ! -f "$SCRIPT_DIR/tests/bats/bin/bats" ]]; then
+    echo "  ℹ️  tests/bats/ submodule 미초기화 — 자동 초기화 시도..."
+    if (cd "$SCRIPT_DIR" && git submodule update --init --recursive tests/bats 2>&1 | tail -3); then
+      echo "  ✅ tests/bats $(bash "$SCRIPT_DIR/tests/bats/bin/bats" --version 2>&1 | head -1)"
+    else
+      echo "  ⚠️  submodule 초기화 실패 (네트워크/권한 확인). 수동 실행: git submodule update --init --recursive"
+    fi
+  else
+    echo "  ✅ tests/bats $(bash "$SCRIPT_DIR/tests/bats/bin/bats" --version 2>&1 | head -1)"
+  fi
 fi
 
 echo ""
