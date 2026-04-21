@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# lib/merge.sh — FlowSet 머지 대기 + 병렬 실행 + 동기화 (v4.0 WI-A2d)
+# lib/merge.sh — FlowSet 머지 대기 + 병렬 실행 + 동기화 (v4.0 WI-A2d, WI-A2e state 전환)
 #
 # 목적:
 #   PR 머지 완료 대기, 병렬 워커 실행(worktree), regression issue → fix WI 주입,
@@ -34,8 +34,11 @@ set -euo pipefail
 #   SCRIPT_DIR, LOG_DIR, FIX_PLAN, COMPLETED_FILE, WORKTREE_DIR,
 #   PARALLEL_COUNT, PROMPT_FILE, MAX_TURNS, ALLOWED_TOOLS
 #
-# 상호작용 state (lib/state.sh RUNTIME_STATE_KEYS):
-#   call_count, loop_count (현재는 전역변수 직접 참조 — WI-A2e에서 state_get/set 전환 예정)
+# 상호작용 state (lib/state.sh의 RUNTIME_STATE_KEYS 중):
+#   call_count, loop_count
+#   (WI-A2e에서 state_get/set으로 전수 전환 완료 — WI-A2a 이중 기록 제거 약속 이행.
+#    execute_parallel subshell은 cur_loop 지역변수 스냅샷으로 RUNTIME_STATE_FILE
+#    공유 안전성 확보 — 절대 경로 기반 state 파일이라 subshell 가시성 보장)
 
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
@@ -67,7 +70,7 @@ wait_for_merge() {
   case $result in
     0) log "✅ PR #$pr_number 머지 완료" ;;
     1) log "❌ PR #$pr_number 실패/닫힘 — guardrails 기록"
-       echo "### [$(date '+%Y-%m-%d %H:%M')] PR #$pr_number 머지 실패 (Iteration #$loop_count)" >> .flowset/guardrails.md ;;
+       echo "### [$(date '+%Y-%m-%d %H:%M')] PR #$pr_number 머지 실패 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md ;;
     2) log "⚠️ PR #$pr_number timeout — 다음 iteration에서 처리" ;;
   esac
   return $result
@@ -277,6 +280,10 @@ execute_parallel() {
   # 워커 실행 전 git log에서 완료 WI 복구
   recover_completed_from_history
 
+  # WI-A2e: state_get 1회 스냅샷 (subshell 내부에서도 동일 값 유효 — RUNTIME_STATE_FILE은 절대 경로)
+  local cur_loop
+  cur_loop=$(state_get loop_count)
+
   while IFS= read -r wi; do
     [[ -n "$wi" ]] && wis+=("$wi")
   done < <(get_next_n_wis "$PARALLEL_COUNT")
@@ -317,7 +324,7 @@ _FLOWSET_CTX_END_
     local rag_context
     rag_context=$(build_rag_context "$wi")
 
-    context="[FlowSet #$loop_count - Worker $idx/$wi_count] Completed: $completed | Remaining: $unchecked
+    context="[FlowSet #${cur_loop} - Worker $idx/$wi_count] Completed: $completed | Remaining: $unchecked
 [TARGET] ${wi}
 [RULE] 위 TARGET 작업 1개만 처리하고 FLOWSET_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
 ${context}
@@ -325,7 +332,7 @@ ${rag_context}"
 
     local prompt_content
     prompt_content=$(cat "$PROMPT_FILE")
-    local logfile="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${loop_count}_${idx}.log"
+    local logfile="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${cur_loop}_${idx}.log"
 
     # Launch in worktree (background)
     local max_turns_args=()
@@ -382,7 +389,7 @@ ${rag_context}"
     base_sha=$(git merge-base HEAD "$branch" 2>/dev/null || echo "none")
 
     # 워커 로그에서 FLOWSET_STATUS 존재 확인 (--max-turns 도달 시 미출력)
-    local worker_log="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${loop_count}_${idx}.log"
+    local worker_log="${SCRIPT_DIR}/${LOG_DIR}/claude_parallel_${cur_loop}_${idx}.log"
     local has_status=false
     if grep -q 'FLOWSET_STATUS\|STATUS:' "$worker_log" 2>/dev/null; then
       has_status=true
@@ -499,7 +506,9 @@ ${rag_context}"
   rmdir "$WORKTREE_DIR" 2>/dev/null || true
 
   log "🔀 병렬 결과: ${merged} PR, ${failed} 실패, ${skipped} 스킵"
-  call_count=$((call_count + wi_count))
+  local cur_calls
+  cur_calls=$(state_get call_count)
+  state_set call_count "$((cur_calls + wi_count))"
 
   # API 리밋 감지 시 쿨다운
   if [[ "${RATE_LIMITED:-false}" == true ]]; then

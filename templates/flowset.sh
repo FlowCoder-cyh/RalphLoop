@@ -50,27 +50,15 @@ if [[ -f .flowsetrc ]]; then
   source .flowsetrc
 fi
 
-# Vault helpers (v3.0 — VAULT_ENABLED=false이면 모든 호출 무동작)
-if [[ -f .flowset/scripts/vault-helpers.sh ]]; then
-  source .flowset/scripts/vault-helpers.sh
-fi
-
-# v4.0 WI-A2a: 런타임 state 라이브러리 (lib/state.sh)
-# 있으면 병렬 안전 파일 기반 state 관리, 없으면 전역변수 shim 폴백 (v3.x 호환)
-# 후속 WI-A2b~e에서 나머지 함수 내 $loop_count 등 직접 참조를 state_get/set으로 점진 전환
+# v4.0 WI-A2a+A2e: 런타임 state 라이브러리 (lib/state.sh) — 필수
+# WI-A2e에서 전역변수 shim 제거 (preflight/worker/merge/vault와 동일 fail-fast 정책).
+# flowset.sh/lib/*.sh가 전역변수 직접 참조 0건이 되었으므로 shim 의미 소실.
 if [[ -f lib/state.sh ]]; then
   source lib/state.sh
 else
-  # fallback shim — lib/state.sh 없는 기존 프로젝트에서 save/restore_state가 작동하도록
-  # state_get KEY → 전역변수 $KEY 값 echo (없으면 빈 문자열)
-  # state_set KEY VAL → 전역변수 $KEY = VAL 할당
-  # 보안 주: KEY는 반드시 RUNTIME_STATE_KEYS 8개(영문+언더스코어) 이름만 전달.
-  #        사용자 입력을 KEY로 직접 주입 금지(eval 취약점 방지). 값(VAL)은 인용 처리됨.
-  state_get() { local k="${1:-}"; [[ -z "$k" ]] && return 0; eval "printf '%s' \"\${$k:-}\""; }
-  state_set() { local k="${1:-}" v="${2:-}"; [[ -z "$k" ]] && return 1; eval "$k=\"\$v\""; }
-  state_init() { :; }  # 전역변수는 이미 선언됨 (:82-93)
-  state_snapshot() { :; }
-  state_restore() { :; }
+  echo "ERROR: lib/state.sh 없음. v4.0부터 모듈 구조(lib/*.sh)입니다." >&2
+  echo "  /wi:init 재실행 또는 cp -r ~/.claude/templates/flowset/lib ./" >&2
+  exit 1
 fi
 
 # v4.0 WI-A2b: 사전 검증 라이브러리 (lib/preflight.sh)
@@ -108,6 +96,17 @@ else
   exit 1
 fi
 
+# v4.0 WI-A2e: Obsidian vault 라이브러리 (lib/vault.sh)
+# vault-helpers.sh 19개 함수 이관. .flowset/scripts/vault-helpers.sh는 하위 호환 shim으로 유지.
+# VAULT_ENABLED=false면 모든 함수 graceful degradation.
+if [[ -f lib/vault.sh ]]; then
+  source lib/vault.sh
+else
+  echo "ERROR: lib/vault.sh 없음. v4.0부터 모듈 구조(lib/*.sh)입니다." >&2
+  echo "  /wi:init 재실행 또는 cp -r ~/.claude/templates/flowset/lib ./" >&2
+  exit 1
+fi
+
 # Defaults (위에서 .flowsetrc가 설정하지 않은 값만 적용)
 # MAX_ITERATIONS: fix_plan의 전체 WI 수 + 20% 여유 (검증 재시도 감안)
 FIX_PLAN="${FIX_PLAN:-.flowset/fix_plan.md}"
@@ -131,38 +130,28 @@ MAX_TURNS=${MAX_TURNS:-40}  # 워커당 최대 턴 수 (0=무제한)
 PARALLEL_COUNT=${PARALLEL_COUNT:-1}
 WORKTREE_DIR=".worktrees"
 
-# State
-call_count=0
-loop_count=0
-consecutive_no_progress=0
-last_git_sha=""
-last_commit_msg=""
-rate_limit_start=$(date +%s)
+# State 상수 (RUNTIME_STATE_KEYS 아님 — 상수/설정)
 NO_PROGRESS_LIMIT=${NO_PROGRESS_LIMIT:-3}
-
-# Session continuity (토큰 절약)
 CONTEXT_THRESHOLD=${CONTEXT_THRESHOLD:-150000}  # 75% of 200k — 이 이상이면 새 세션
-current_session_id=""
-total_cost_usd=0
 
-# 상태 파일 (비정상 종료 복구용)
+# 영속 상태 파일 (비정상 종료 복구용 — lib/state.sh의 RUNTIME_STATE_FILE과 별개)
 STATE_FILE=".flowset/loop_state.json"
 
 # 완료 WI 로컬 추적 (untracked — reset --hard에서 보존됨)
 # fix_plan은 READ-ONLY. 이 파일이 유일한 진실의 원천(SSOT)
 COMPLETED_FILE=".flowset/completed_wis.txt"
 
-# v4.0 WI-A2a: 런타임 state 초기화 + 전역변수 → state 동기화
-# lib/state.sh가 있으면 파일 기반 격리 활성, 없으면 shim(전역변수 그대로) 동작
+# v4.0 WI-A2e: 런타임 state 초기화 (이중 기록 제거 — 전역변수 선언 삭제, state_set만 유지)
+# lib/state.sh가 RUNTIME_STATE_FILE 생성 + 8개 키 ""로 초기화 → 숫자 키 0, 시간 키만 date 주입
 state_init
-state_set call_count "$call_count"
-state_set loop_count "$loop_count"
-state_set consecutive_no_progress "$consecutive_no_progress"
-state_set last_git_sha "$last_git_sha"
-state_set last_commit_msg "$last_commit_msg"
-state_set rate_limit_start "$rate_limit_start"
-state_set current_session_id "$current_session_id"
-state_set total_cost_usd "$total_cost_usd"
+state_set call_count 0
+state_set loop_count 0
+state_set consecutive_no_progress 0
+state_set last_git_sha ""
+state_set last_commit_msg ""
+state_set rate_limit_start "$(date +%s)"
+state_set current_session_id ""
+state_set total_cost_usd 0
 
 #==============================
 # Section 2: STATE MANAGEMENT
@@ -209,21 +198,18 @@ restore_state() {
         # 코드가 변경됨 → 세션 재활용 불가
         log "🔀 마지막 실행 이후 코드 변경 감지 (수동 작업 있음)"
         log "   이전 세션 무효화 → 새 세션으로 시작합니다"
-        current_session_id=""
         state_set current_session_id ""
       else
         # 코드 변경 없음 → 이전 세션 재활용 가능
         local prev_session
         prev_session=$(jq -r '.session_id // ""' "$STATE_FILE" 2>/dev/null || echo "")
         if [[ -n "$prev_session" ]]; then
-          current_session_id="$prev_session"
           state_set current_session_id "$prev_session"
           log "🔄 이전 세션 복구: ${prev_session:0:8}..."
         fi
       fi
 
       log "📋 completed_wis.txt + fix_plan.md 기준으로 미완료 WI부터 재개합니다"
-      total_cost_usd=$prev_cost
       state_set total_cost_usd "$prev_cost"
       state_set last_git_sha "$prev_sha"
       state_set loop_count "$prev_loop"
@@ -434,7 +420,7 @@ cleanup() {
   counts=$(count_tasks)
   local completed="${counts%% *}"
   local remaining="${counts##* }"
-  log "=== FlowSet 종료 (${loop_count} iterations) ==="
+  log "=== FlowSet 종료 ($(state_get loop_count) iterations) ==="
   log "최종: ${completed} 완료, ${remaining} 남음"
   log "💡 재실행: bash flowset.sh (미완료 WI부터 자동 재개)"
 }
@@ -473,9 +459,10 @@ validate_post_iteration() {
   local violations=0
 
   # 1. 커밋 메시지 형식 검증
-  local latest_msg
+  local latest_msg prev_commit_msg
   latest_msg=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
-  if [[ -n "$latest_msg" && "$latest_msg" != "$last_commit_msg" ]]; then
+  prev_commit_msg=$(state_get last_commit_msg)
+  if [[ -n "$latest_msg" && "$latest_msg" != "$prev_commit_msg" ]]; then
     local pattern="^WI-[0-9]{3,4}-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
     local pattern_system="^WI-(chore|docs) .+"
     local pattern_merge="^Merge "
@@ -483,7 +470,7 @@ validate_post_iteration() {
       log "VIOLATION: 커밋 메시지 형식 오류 - $latest_msg"
       violations=$((violations + 1))
     fi
-    last_commit_msg="$latest_msg"
+    state_set last_commit_msg "$latest_msg"
   fi
 
   # 2. .flowset/ 파일 삭제 여부 확인
@@ -533,7 +520,7 @@ validate_post_iteration() {
 
       if [[ "$rag_updated" == false ]]; then
         log "RAG-CHECK: $rag_reason 감지 — RAG 미업데이트"
-        echo "### [$(date '+%Y-%m-%d %H:%M')] RAG 미업데이트: $rag_reason (Iteration #$loop_count)" >> .flowset/guardrails.md
+        echo "### [$(date '+%Y-%m-%d %H:%M')] RAG 미업데이트: $rag_reason (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
         echo "[RAG-UPDATE-NEEDED] $rag_reason — .claude/memory/rag/ 파일 업데이트 필요" > .flowset/rag_pending.txt
       fi
     fi
@@ -550,13 +537,13 @@ validate_post_iteration() {
   file_count=$(echo "$changed_files_all" | grep -c '.' 2>/dev/null || echo "0")
   if [[ $file_count -gt 10 ]]; then
     log "WARNING: 변경 파일 ${file_count}개 (10개 초과) — scope creep 의심"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] scope creep: ${file_count}개 파일 변경 (Iteration #$loop_count)" >> .flowset/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] scope creep: ${file_count}개 파일 변경 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
   fi
 
   # 5. 금지 파일 수정 감지
   if echo "$changed_files_all" | grep -qE '^\.(env|env\.local)$|^package-lock\.json$' 2>/dev/null; then
     log "WARNING: 금지 파일 수정 감지 (.env/package-lock)"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] 금지 파일 수정 감지 (Iteration #$loop_count)" >> .flowset/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] 금지 파일 수정 감지 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
   fi
 
   # 6. 빈 구현 감지 (TODO/placeholder/stub)
@@ -565,7 +552,7 @@ validate_post_iteration() {
     incomplete=$(echo "$changed_files_all" | xargs grep -l 'TODO\|FIXME\|placeholder\|stub\|not implemented\|NotImplemented' 2>/dev/null | head -3 || true)
     if [[ -n "$incomplete" ]]; then
       log "WARNING: 불완전 구현 감지 (TODO/placeholder) — $incomplete"
-      echo "### [$(date '+%Y-%m-%d %H:%M')] 불완전 구현: $incomplete (Iteration #$loop_count)" >> .flowset/guardrails.md
+      echo "### [$(date '+%Y-%m-%d %H:%M')] 불완전 구현: $incomplete (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
     fi
   fi
 
@@ -577,7 +564,7 @@ validate_post_iteration() {
       for api_file in $new_apis; do
         if [[ -f "$api_file" ]] && ! grep -q "NextResponse\|Response\|json(" "$api_file" 2>/dev/null; then
           log "WARNING: API 형식 미준수 — $api_file"
-          echo "### [$(date '+%Y-%m-%d %H:%M')] API 형식 미준수: $api_file (Iteration #$loop_count)" >> .flowset/guardrails.md
+          echo "### [$(date '+%Y-%m-%d %H:%M')] API 형식 미준수: $api_file (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
         fi
       done
     fi
@@ -595,7 +582,7 @@ validate_post_iteration() {
       done
       if [[ "$has_get" == false ]]; then
         log "WARNING: WI에 GET 명시됐으나 API 라우트에 GET 핸들러 없음"
-        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: GET 핸들러 누락 (Iteration #$loop_count)" >> .flowset/guardrails.md
+        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: GET 핸들러 누락 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
       fi
     fi
     # "POST" 수용 기준인데 POST 핸들러 없음
@@ -606,14 +593,14 @@ validate_post_iteration() {
       done
       if [[ "$has_post" == false ]]; then
         log "WARNING: WI에 POST 명시됐으나 API 라우트에 POST 핸들러 없음"
-        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: POST 핸들러 누락 (Iteration #$loop_count)" >> .flowset/guardrails.md
+        echo "### [$(date '+%Y-%m-%d %H:%M')] 수용 기준 미충족: POST 핸들러 누락 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
       fi
     fi
   fi
 
   if [[ $violations -gt 0 ]]; then
     log "POST-VALIDATION: $violations violations detected"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] 자동 감지: $violations건 규칙 위반 (Iteration #$loop_count)" >> .flowset/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] 자동 감지: $violations건 규칙 위반 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
     return 1
   fi
   return 0
@@ -720,32 +707,39 @@ check_progress() {
     has_uncommitted_changes=true
   fi
 
-  if [[ "$current_sha" == "$last_git_sha" && "$has_uncommitted_changes" == "false" ]]; then
-    consecutive_no_progress=$((consecutive_no_progress + 1))
-    log "No progress detected ($consecutive_no_progress/$NO_PROGRESS_LIMIT)"
-    if [[ $consecutive_no_progress -ge $NO_PROGRESS_LIMIT ]]; then
+  local prev_sha prev_no_progress
+  prev_sha=$(state_get last_git_sha)
+  prev_no_progress=$(state_get consecutive_no_progress)
+  if [[ "$current_sha" == "$prev_sha" && "$has_uncommitted_changes" == "false" ]]; then
+    prev_no_progress=$((prev_no_progress + 1))
+    state_set consecutive_no_progress "$prev_no_progress"
+    log "No progress detected ($prev_no_progress/$NO_PROGRESS_LIMIT)"
+    if [[ $prev_no_progress -ge $NO_PROGRESS_LIMIT ]]; then
       log "CIRCUIT BREAKER: $NO_PROGRESS_LIMIT iterations without progress - halting"
       return 1
     fi
   else
-    consecutive_no_progress=0
-    last_git_sha="$current_sha"
+    state_set consecutive_no_progress 0
+    state_set last_git_sha "$current_sha"
   fi
   return 0
 }
 
 check_rate_limit() {
-  if [[ $call_count -ge $RATE_LIMIT_PER_HOUR ]]; then
-    local now elapsed
+  local cur_calls
+  cur_calls=$(state_get call_count)
+  if [[ $cur_calls -ge $RATE_LIMIT_PER_HOUR ]]; then
+    local now elapsed rl_start
     now=$(date +%s)
-    elapsed=$(( now - rate_limit_start ))
+    rl_start=$(state_get rate_limit_start)
+    elapsed=$(( now - rl_start ))
     if [[ $elapsed -lt 3600 ]]; then
       local wait_time=$(( 3600 - elapsed ))
       log "Rate limit ($RATE_LIMIT_PER_HOUR/hr) reached. Waiting ${wait_time}s..."
       sleep "$wait_time"
     fi
-    call_count=0
-    rate_limit_start=$(date +%s)
+    state_set call_count 0
+    state_set rate_limit_start "$(date +%s)"
   fi
 }
 
@@ -759,7 +753,7 @@ build_context() {
   local rag
   rag=$(build_rag_context "$target_wi")
   cat <<EOF
-[FlowSet #$loop_count] Completed: $completed | Remaining: $remaining
+[FlowSet #$(state_get loop_count)] Completed: $completed | Remaining: $remaining
 [TARGET] ${target_wi}
 [RULE] 위 TARGET 작업 1개만 처리하고 FLOWSET_STATUS 출력 후 즉시 종료. 다른 WI 절대 금지.
 ${rag}
@@ -942,7 +936,7 @@ record_pattern() {
   fi
 
   # v3.0: vault에도 패턴 기록
-  vault_record "patterns" "iter-${loop_count}.md" \
+  vault_record "patterns" "iter-$(state_get loop_count).md" \
     "- ${result} | ${wi_type} | ${domain} | ${elapsed}s | ${files:-none}" 2>/dev/null || true
 }
 
@@ -956,7 +950,7 @@ log_trace() {
   local cost="${iteration_cost:-0}"
   local turns="${MAX_TURNS:-0}"
 
-  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"iter\":$loop_count,\"wi\":\"${wi_name}\",\"result\":\"${result}\",\"files\":${files_count},\"sec\":${elapsed},\"cost\":${cost}}" >> "$trace_file" 2>/dev/null || true
+  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"iter\":$(state_get loop_count),\"wi\":\"${wi_name}\",\"result\":\"${result}\",\"files\":${files_count},\"sec\":${elapsed},\"cost\":${cost}}" >> "$trace_file" 2>/dev/null || true
 
   # 최근 200건만 유지
   if [[ -f "$trace_file" ]] && [[ $(wc -l < "$trace_file" 2>/dev/null || echo 0) -gt 200 ]]; then
@@ -1122,15 +1116,18 @@ main() {
   fi
   log "Allowed tools: $ALLOWED_TOOLS"
 
-  last_git_sha=$(git rev-parse HEAD 2>/dev/null || echo "none")
-  last_commit_msg=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
+  state_set last_git_sha "$(git rev-parse HEAD 2>/dev/null || echo "none")"
+  state_set last_commit_msg "$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")"
 
-  while [[ $loop_count -lt $MAX_ITERATIONS ]]; do
-    loop_count=$((loop_count + 1))
-    log "--- Iteration $loop_count/$MAX_ITERATIONS ---"
+  local cur_loop
+  cur_loop=$(state_get loop_count)
+  while [[ $cur_loop -lt $MAX_ITERATIONS ]]; do
+    cur_loop=$((cur_loop + 1))
+    state_set loop_count "$cur_loop"
+    log "--- Iteration $cur_loop/$MAX_ITERATIONS ---"
 
     # 0. RAG: codebase-map 10 iteration마다 갱신
-    if [[ $((loop_count % 10)) -eq 0 ]]; then
+    if [[ $((cur_loop % 10)) -eq 0 ]]; then
       generate_codebase_map || true
     fi
 
@@ -1175,7 +1172,7 @@ main() {
         fi
       fi
       safe_sync_main
-      last_git_sha=$(git rev-parse HEAD 2>/dev/null || echo "none")
+      state_set last_git_sha "$(git rev-parse HEAD 2>/dev/null || echo "none")"
 
       # 병렬 모드: 검증 에이전트 실행
       if [[ -f ".flowset/scripts/verify-requirements.sh" && -f ".flowset/requirements.md" ]]; then
@@ -1185,7 +1182,7 @@ main() {
         if [[ $verify_result -eq 2 ]]; then
           log "⚠️ 검증 에이전트: 요구사항 누락 감지"
           if [[ -f ".flowset/verify-result.md" ]]; then
-            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$loop_count, 병렬)" >> .flowset/guardrails.md
+            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$(state_get loop_count), 병렬)" >> .flowset/guardrails.md
             grep -E '^- (❌|⚠️)' .flowset/verify-result.md >> .flowset/guardrails.md 2>/dev/null || true
           fi
         fi
@@ -1238,7 +1235,7 @@ main() {
         if [[ $verify_result -eq 2 ]]; then
           log "⚠️ 검증 에이전트: 요구사항 누락 감지 — guardrails 기록"
           if [[ -f ".flowset/verify-result.md" ]]; then
-            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$loop_count)" >> .flowset/guardrails.md
+            echo "### [$(date '+%Y-%m-%d %H:%M')] 검증 에이전트 — 요구사항 누락 (Iteration #$(state_get loop_count))" >> .flowset/guardrails.md
             grep -E '^- (❌|⚠️)' .flowset/verify-result.md >> .flowset/guardrails.md 2>/dev/null || true
           fi
         fi
@@ -1262,14 +1259,15 @@ main() {
           record_pattern "$current_wi" "skipped" "" "$iter_elapsed" || true
           log_trace "$current_wi" "skipped" "0" "$iter_elapsed"
         fi
-        last_git_sha=$(git rev-parse HEAD 2>/dev/null || echo "none")
+        state_set last_git_sha "$(git rev-parse HEAD 2>/dev/null || echo "none")"
       else
         # main에 있음 → SHA 변경으로 판단 (기존 로직)
-        local current_sha_now
+        local current_sha_now prev_sha_loop
         current_sha_now=$(git rev-parse HEAD 2>/dev/null || echo "none")
-        if [[ "$current_sha_now" != "$last_git_sha" ]]; then
+        prev_sha_loop=$(state_get last_git_sha)
+        if [[ "$current_sha_now" != "$prev_sha_loop" ]]; then
           mark_wi_done "$current_wi" || true
-          last_git_sha="$current_sha_now"
+          state_set last_git_sha "$current_sha_now"
           record_pattern "$current_wi" "merged" "" "$iter_elapsed" || true
           log_trace "$current_wi" "merged" "0" "$iter_elapsed"
         else

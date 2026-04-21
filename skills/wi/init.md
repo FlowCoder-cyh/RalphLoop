@@ -106,13 +106,13 @@ cp "$TEMPLATE_DIR/.editorconfig" ./.editorconfig
 cp "$TEMPLATE_DIR/CLAUDE.md" ./CLAUDE.md
 
 # v4.0 WI-A2a~e: lib/ 런타임 라이브러리 복사
-# state.sh (WI-A2a) + preflight.sh (WI-A2b) + worker.sh (WI-A2c) + merge.sh (WI-A2d)
-# vault.sh는 WI-A2e에서 추가 예정.
+# state.sh (WI-A2a) + preflight.sh (WI-A2b) + worker.sh (WI-A2c) + merge.sh (WI-A2d) + vault.sh (WI-A2e)
 mkdir -p ./lib
 cp "$TEMPLATE_DIR/lib/state.sh" ./lib/state.sh
 cp "$TEMPLATE_DIR/lib/preflight.sh" ./lib/preflight.sh
 cp "$TEMPLATE_DIR/lib/worker.sh" ./lib/worker.sh
 cp "$TEMPLATE_DIR/lib/merge.sh" ./lib/merge.sh
+cp "$TEMPLATE_DIR/lib/vault.sh" ./lib/vault.sh
 
 # .flowset/ 내부 파일 복사 (디렉토리는 이미 Step 3에서 생성됨)
 cp "$TEMPLATE_DIR/.flowset/PROMPT.md" ./.flowset/PROMPT.md

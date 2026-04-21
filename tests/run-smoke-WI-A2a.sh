@@ -176,20 +176,19 @@ else
 fi
 
 echo ""
-echo "=== A2a-10: 설계 §11 체크리스트 — flowset.sh:82-93 변수 vs RUNTIME_STATE_KEYS 대조 ==="
+echo "=== A2a-10: 설계 §11 체크리스트 — RUNTIME_STATE_KEYS 8개 vs flowset.sh 초기화 블록 대조 ==="
 # 설계 §11 line 617-620 "이관 누락 방지 체크리스트"
-# flowset.sh:82-93에 선언된 전역변수 8개와 RUNTIME_STATE_KEYS 8개가 1:1 대응하는지 검증
+# WI-A2e 후: 전역변수 선언(:135-146) + 이중 state_set(:158-165) 블록이 제거되고
+# 단일 state_init + 8개 state_set 초기화 블록만 남음. 이 블록의 키 8개가 RUNTIME_STATE_KEYS와 일치하는지 검증.
 expected_vars="call_count consecutive_no_progress current_session_id last_commit_msg last_git_sha loop_count rate_limit_start total_cost_usd"
-actual_vars=$(awk '/^# State$/,/^COMPLETED_FILE=/' templates/flowset.sh | grep -oE '^[a-z_]+=' | sed 's/=$//' | sort -u | tr '\n' ' ' | sed 's/ $//')
-# 정렬된 8개 이름 매칭 (순서 무관)
+# 최상단 초기화 블록에서 state_set 호출의 키 추출 (save_state/restore_state 내부 호출은 제외 — 초기화 직후 8개만 추출)
+actual_vars=$(grep -oE '^state_set [a-z_]+' templates/flowset.sh | awk '{print $2}' | sort -u | tr '\n' ' ' | sed 's/ $//')
 actual_sorted=$(echo "$actual_vars" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')
 expected_sorted=$(echo "$expected_vars" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')
-# flowset.sh에 있는 변수 중 RUNTIME_STATE_KEYS에 없는 것 탐지 (NO_PROGRESS_LIMIT, CONTEXT_THRESHOLD는 상수라 제외)
-diff_output=$(comm -23 <(echo "$expected_sorted" | tr ' ' '\n') <(echo "$actual_sorted" | tr ' ' '\n' | grep -vE '^(NO_PROGRESS_LIMIT|CONTEXT_THRESHOLD|STATE_FILE|COMPLETED_FILE)$') 2>/dev/null || true)
-if [[ -z "$diff_output" ]]; then
-  pass "RUNTIME_STATE_KEYS 8개 ↔ flowset.sh 전역변수 정합 (iteration_cost/total_context_tokens는 execute_claude 지역변수라 제외)"
+if [[ "$actual_sorted" == "$expected_sorted" ]]; then
+  pass "RUNTIME_STATE_KEYS 8개 ↔ flowset.sh state_set 초기화 블록 정합 (WI-A2e 이중 기록 제거 구조)"
 else
-  fail "RUNTIME_STATE_KEYS 누락: $diff_output"
+  fail "RUNTIME_STATE_KEYS 불일치 — 기대: [$expected_sorted], 실제: [$actual_sorted]"
 fi
 
 echo ""

@@ -21,8 +21,7 @@ set -euo pipefail
 #
 # 상호작용 state (lib/state.sh의 RUNTIME_STATE_KEYS 중):
 #   call_count, loop_count, current_session_id, total_cost_usd
-#   (현재는 전역변수 직접 참조 — WI-A2e 완료 시 state_get/set으로 전환 예정,
-#    이는 WI-A2a smoke-WI-A2a.md "이중 기록 제거 시점"에 명시된 숙제)
+#   (WI-A2e에서 state_get/set으로 전수 전환 완료 — WI-A2a 이중 기록 제거 약속 이행)
 #
 # 반환값:
 #   0 — 정상 완료
@@ -39,13 +38,16 @@ execute_claude() {
 
   # claude -p가 git 작업 중 삭제할 수 있으므로 매번 보장
   mkdir -p "$LOG_DIR"
-  local logfile="$LOG_DIR/claude_output_${loop_count}.log"
+  local cur_loop cur_session
+  cur_loop=$(state_get loop_count)
+  cur_session=$(state_get current_session_id)
+  local logfile="$LOG_DIR/claude_output_${cur_loop}.log"
 
   # 세션 재활용 또는 새 세션 결정
   local session_args=()
-  if [[ -n "$current_session_id" ]]; then
-    session_args=(--resume "$current_session_id")
-    log "🔄 세션 재활용: ${current_session_id:0:8}..."
+  if [[ -n "$cur_session" ]]; then
+    session_args=(--resume "$cur_session")
+    log "🔄 세션 재활용: ${cur_session:0:8}..."
   else
     log "🆕 새 세션 시작"
   fi
@@ -82,7 +84,9 @@ execute_claude() {
   wait "$pid" || true
   printf "\r  ✅ 완료 (%dm %02ds)                                              \n" "$((elapsed/60))" "$((elapsed%60))"
 
-  call_count=$((call_count + 1))
+  local cur_calls
+  cur_calls=$(state_get call_count)
+  state_set call_count "$((cur_calls + 1))"
 
   # Read output from log
   local output
@@ -106,10 +110,13 @@ execute_claude() {
   # 비용 표시: API 키 사용자만 (구독 사용자는 토큰만 표시)
   if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
     # API 키 사용자 → 비용 표시
+    local cur_cost
+    cur_cost=$(state_get total_cost_usd)
     if [[ -n "$iteration_cost" ]]; then
-      total_cost_usd=$(awk "BEGIN{printf \"%.2f\", $total_cost_usd + $iteration_cost}")
+      cur_cost=$(awk "BEGIN{printf \"%.2f\", $cur_cost + $iteration_cost}")
+      state_set total_cost_usd "$cur_cost"
     fi
-    log "📊 컨텍스트: ${total_context_tokens} tokens | 비용: \$${iteration_cost:-0} (누적: \$${total_cost_usd})"
+    log "📊 컨텍스트: ${total_context_tokens} tokens | 비용: \$${iteration_cost:-0} (누적: \$${cur_cost})"
   else
     # 구독(auth) 사용자 → 비용 없이 토큰만
     log "📊 컨텍스트: ${total_context_tokens} tokens (구독 플랜 — 별도 과금 없음)"
@@ -118,9 +125,9 @@ execute_claude() {
   # 컨텍스트 임계치 체크 → 세션 리셋 여부 결정
   if [[ $total_context_tokens -gt $CONTEXT_THRESHOLD ]]; then
     log "⚠️ 컨텍스트 ${total_context_tokens} > ${CONTEXT_THRESHOLD} — 다음 반복에서 새 세션 시작"
-    current_session_id=""
+    state_set current_session_id ""
   elif [[ -n "$new_session_id" ]]; then
-    current_session_id="$new_session_id"
+    state_set current_session_id "$new_session_id"
   fi
 
   # Check for exit signal (JSON 또는 plain text 형식 모두 감지)
@@ -140,7 +147,7 @@ execute_claude() {
   tests_added=$(echo "$output" | grep -oE 'TESTS_ADDED:\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
   if [[ "${tests_added:-}" == "0" ]]; then
     log "WARNING: TESTS_ADDED=0 — TDD 미수행 의심"
-    echo "### [$(date '+%Y-%m-%d %H:%M')] TDD 미수행: 테스트 0개 추가 (Iteration #$loop_count)" >> .flowset/guardrails.md
+    echo "### [$(date '+%Y-%m-%d %H:%M')] TDD 미수행: 테스트 0개 추가 (Iteration #${cur_loop})" >> .flowset/guardrails.md
   fi
 
   return 0
