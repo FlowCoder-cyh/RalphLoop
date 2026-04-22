@@ -37,6 +37,68 @@ personas: [architect]
 
 ### Step 0: 이전 상태 복원 (세션 재개 시)
 
+#### Step 0.1: prd-state.json v1 → v2 migration (WI-001, v4.0)
+
+`.flowset/prd-state.json` 읽기 **전**에 아래 함수를 실행하여 스키마를 v2로 승격합니다.
+**idempotent**(v2면 즉시 return), **atomic**(tmp → mv), **rollback**(실패 시 `.v1.bak` 복원) 보장.
+
+v2 신규 필드(entities/roles/crud_matrix/permission_matrix/auth_patterns/auth_framework)는 Group γ(WI-C1~)에서 사용되며, 미존재 시 기본값으로 채워집니다. 기존 v1 파일은 `schema_version` 필드 자체가 없으며, migration 후에는 `"schema_version": "v2"`가 추가됩니다.
+
+```bash
+migrate_prd_state_v1_to_v2() {
+  local state_file=".flowset/prd-state.json"
+  [[ ! -f "$state_file" ]] && return 0  # 파일 없으면 skip (신규 프로젝트)
+
+  # idempotent: 이미 v2면 즉시 return
+  local schema_version
+  schema_version=$(jq -r '.schema_version // "v1"' "$state_file" 2>/dev/null || echo "v1")
+  [[ "$schema_version" == "v2" ]] && return 0
+
+  # 원본 백업 (실패 시 복원용 스냅샷)
+  cp "$state_file" "${state_file}.v1.bak" || return 1
+
+  # v2 필드 병합 (기존 필드 전부 보존 — jq `. +` 우측이 좌측을 덮어씀, `//` 기본값 적용)
+  local tmp="${state_file}.tmp"
+  if jq '. + {
+    schema_version: "v2",
+    entities: (.entities // []),
+    roles: (.roles // []),
+    crud_matrix: (.crud_matrix // {}),
+    permission_matrix: (.permission_matrix // {}),
+    auth_patterns: (.auth_patterns // []),
+    auth_framework: (.auth_framework // "")
+  }' "$state_file" > "$tmp"; then
+    # atomic: tmp → 원본 교체
+    if ! mv "$tmp" "$state_file"; then
+      # 교체 실패 → 백업에서 복원
+      mv "${state_file}.v1.bak" "$state_file"
+      rm -f "$tmp"
+      return 1
+    fi
+  else
+    # jq 변환 실패 → 백업에서 복원
+    mv "${state_file}.v1.bak" "$state_file"
+    rm -f "$tmp"
+    return 1
+  fi
+  return 0
+}
+
+# Step 0 진입점에서 최초 1회 실행
+migrate_prd_state_v1_to_v2 || {
+  echo "ERROR: prd-state.json migration 실패. .v1.bak에서 복원 확인 후 재시도 필요." >&2
+  exit 1
+}
+```
+
+**하위 호환** (설계 §8):
+- `prd-state.json` 없음 → skip (신규 프로젝트 정상 흐름)
+- `schema_version=v2` → skip (재실행 안전)
+- 기존 v1 필드(`step`/`project_name`/`overview`/`tech_stack`/`L1`/`decisions`/`user_constraints`/...) 는 **전부 보존**
+- migration 후 원본은 `.v1.bak`로 영구 보존 (수동 복구 시 사용)
+
+#### Step 0.2: 상태 복원
+
 `.flowset/prd-state.json` 파일이 존재하면 읽어서 이전 대화 상태를 복원:
 
 ```json
