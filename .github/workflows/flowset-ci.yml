@@ -62,7 +62,7 @@ jobs:
         run: bash tests/bats/bin/bats tests/bats_tests/core.bats
 
   smoke:
-    name: bash smoke (126 + A3 17 + 001 38 = 181 assertion)
+    name: bash smoke (126 + A3 17 + 001 41 = 184 assertion)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

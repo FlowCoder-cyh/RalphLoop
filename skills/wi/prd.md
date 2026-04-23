@@ -48,6 +48,7 @@ v2 신규 필드(entities/roles/crud_matrix/permission_matrix/auth_patterns/auth
 migrate_prd_state_v1_to_v2() {
   local state_file=".flowset/prd-state.json"
   [[ ! -f "$state_file" ]] && return 0  # 파일 없으면 skip (신규 프로젝트)
+  [[ ! -s "$state_file" ]] && return 0  # 빈 파일(0바이트) skip — /wi:prd 비정상 종료 후 잔존 파일 방어
 
   # idempotent: 이미 v2면 즉시 return
   local schema_version

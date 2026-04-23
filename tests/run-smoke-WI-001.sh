@@ -238,6 +238,28 @@ else
   fail "시나리오 D: 원본 파일 손실 (rollback 실패)"
 fi
 
+# 시나리오 G: 빈 파일(0 바이트) 엣지 케이스 — /wi:prd 비정상 종료 잔존 파일 방어
+# evaluator WI-001 1차 평가 피드백: `[[ -s "$state_file" ]]` 선체크 검증
+rm -f .flowset/prd-state.json .flowset/prd-state.json.v1.bak .flowset/prd-state.json.tmp
+: > .flowset/prd-state.json  # 0바이트 파일 생성
+if migrate_prd_state_v1_to_v2; then
+  pass "시나리오 G: 빈 파일 → return 0 (skip 경로 발동)"
+else
+  fail "시나리오 G: 빈 파일에서 return 1 (기대: 0)"
+fi
+# 백업 파일이 생성되지 않아야 함 (v2 진행 없이 즉시 skip)
+if [[ ! -f .flowset/prd-state.json.v1.bak ]]; then
+  pass "시나리오 G: 빈 파일에서 .v1.bak 미생성 (migration 진입 차단)"
+else
+  fail "시나리오 G: 빈 파일에서 .v1.bak 생성 (skip 경로 미발동)"
+fi
+# 원본 파일은 여전히 0바이트 (변경 없음)
+if [[ -f .flowset/prd-state.json && ! -s .flowset/prd-state.json ]]; then
+  pass "시나리오 G: 빈 파일 그대로 유지 (0바이트)"
+else
+  fail "시나리오 G: 빈 파일 변조됨"
+fi
+
 # 시나리오 E: 하위 호환 핵심 — .flowsetrc에 PROJECT_CLASS 없음 → 기존 동작
 cd "$REPO_ROOT"
 LEGACY_RC="$TMP_DIR/legacy.flowsetrc"
