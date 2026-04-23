@@ -17,13 +17,25 @@ personas: [devops-engineer, architect]
 
 ## Usage
 ```
-/wi:init [project-name] [--type typescript|python|rust|go|java] [--org github-org] [--private]
+/wi:init [project-name] [--type typescript|python|rust|go|java] [--class code|content|hybrid] [--org github-org] [--private]
 ```
 
 ## Behavioral Flow
 
 ### Step 1: 인자 파싱 & 사전 검증
 - `$ARGUMENTS`에서 프로젝트명, 타입, GitHub org 추출
+- **`--class` 플래그**(v4.0, WI-001): `code|content|hybrid` 중 선택. 미지정 시 기본값 `code` (기존 v3.x 동작 = 하위 호환).
+  - `code`    : 코드 생성 중심 프로젝트 (SaaS, 앱, API 등) — **기본값**
+  - `content` : 문서/콘텐츠 생성 중심 (기술 블로그, 연구 보고서 등)
+  - `hybrid`  : code + content 혼합 (OSS 프로젝트 + 공식 문서 등)
+- 인자로 `--class`가 전달되지 않고 대화형이면 아래 질문을 제시:
+  ```
+  📋 PROJECT_CLASS 선택
+  1) code (기본) — 코드 생성 중심
+  2) content    — 문서/콘텐츠 생성 중심
+  3) hybrid     — 혼합
+  ```
+  사용자가 번호 또는 이름으로 응답. 응답 없음 → `code`.
 - 누락된 필수 정보는 사용자에게 질문
 - 필수 도구 확인: `git`, `gh` (GitHub CLI). 미설치 시 설치 안내 후 중단
 - `gh auth status`로 인증 상태 확인. 미인증 시 `gh auth login` 안내 후 중단
@@ -175,7 +187,14 @@ chmod +x flowset.sh .flowset/hooks/* .flowset/scripts/*.sh 2>/dev/null || true
 **복사 후 프로젝트별 커스터마이징만 수행:**
 
 #### .flowsetrc
-`PROJECT_NAME`, `PROJECT_TYPE` 필드를 인자 값으로 채움.
+`PROJECT_NAME`, `PROJECT_TYPE`, `PROJECT_CLASS` 필드를 인자 값으로 채움.
+
+```bash
+sed -i "s|^PROJECT_NAME=.*|PROJECT_NAME=\"$PROJECT_NAME\"|" .flowsetrc
+sed -i "s|^PROJECT_TYPE=.*|PROJECT_TYPE=\"$PROJECT_TYPE\"|" .flowsetrc
+# PROJECT_CLASS: Step 1에서 수집된 값(code|content|hybrid, 미입력 시 code)
+sed -i "s|^PROJECT_CLASS=.*|PROJECT_CLASS=\"${PROJECT_CLASS:-code}\"|" .flowsetrc
+```
 
 #### CLAUDE.md
 `{PROJECT_NAME}`, `{PROJECT_TYPE}`, `{PROJECT_DESCRIPTION}` 플레이스홀더를 실제 값으로 치환.
@@ -183,10 +202,39 @@ chmod +x flowset.sh .flowset/hooks/* .flowset/scripts/*.sh 2>/dev/null || true
 #### .claude/rules/project.md
 `{PROJECT_NAME}`, `{PROJECT_TYPE}` 플레이스홀더를 실제 값으로 치환.
 
-### Step 3.5: ownership.json 동적 생성 (프로젝트 타입별)
+### Step 3.5: ownership.json 동적 생성 (프로젝트 타입별 + class별)
 
 `.flowsetrc`의 `PROJECT_TYPE`을 기반으로 `.flowset/ownership.json`을 생성합니다.
 프로젝트 구조에 맞는 팀 소유 디렉토리를 매핑합니다.
+
+**v4.0 PROJECT_CLASS 분기 (WI-001 게이트웨이)**:
+- `PROJECT_CLASS=code` (기본) → 기존 v3.x 로직 그대로 (frontend/backend/qa/devops/planning). **기존 프로젝트 동작 완전 동일**.
+- `PROJECT_CLASS=content` → [WI-B1에서 구현] writer/reviewer/approver/designer/shared 5개 역할. 현재는 `code` 템플릿으로 fallback.
+- `PROJECT_CLASS=hybrid` → [WI-B1에서 구현] code + content 공존, 팀명 중복 감지. 현재는 `code` 템플릿으로 fallback.
+
+WI-001 범위에서는 **질문/필드 전달까지만** 구현. content/hybrid의 실제 팀 역할 분기는 WI-B1에서 확장되며, 그때까지 `code` 기본값으로 동작하여 기존 사용자에게 영향 없음.
+
+```bash
+# 읽기
+source .flowsetrc
+PROJECT_CLASS="${PROJECT_CLASS:-code}"
+
+# case 블록은 validation 게이트 역할만 수행 (알 수 없는 class 값 거부 + 분기별 안내).
+# 실제 팀 매핑은 case 종료 **이후** 본체 테이블(아래 PROJECT_TYPE 매트릭스)에서 일괄 처리되며,
+# code/content/hybrid 3종 모두 현재는 동일한 code 매핑을 사용한다 (content/hybrid는 WI-B1에서 분기 확장).
+case "$PROJECT_CLASS" in
+  code)
+    : # validation 통과 — 본체 테이블에서 code 매핑 적용
+    ;;
+  content|hybrid)
+    echo "ℹ️  PROJECT_CLASS=$PROJECT_CLASS: WI-B1(v4.0 Group β)에서 전용 분기 예정. 지금은 code 템플릿으로 fallback."
+    ;;
+  *)
+    echo "ERROR: 알 수 없는 PROJECT_CLASS='$PROJECT_CLASS' (code|content|hybrid 중 선택)" >&2
+    exit 1
+    ;;
+esac
+```
 
 | PROJECT_TYPE | frontend | backend | qa | shared |
 |---|---|---|---|---|

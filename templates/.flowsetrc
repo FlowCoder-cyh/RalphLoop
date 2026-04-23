@@ -5,6 +5,13 @@
 PROJECT_NAME=""
 PROJECT_TYPE=""         # typescript, python, rust, go, etc.
 
+# 프로젝트 class (v4.0) — Group β/γ/δ 분기의 단일 게이트웨이
+#   code    : 코드 생성 중심 (기존 v3.x 동작 = 기본값, 하위 호환)
+#   content : 문서/콘텐츠 생성 중심 (CI/PR/hook 선택적 적용)
+#   hybrid  : code + content 혼합 (경로별 class 태깅)
+# 기존 프로젝트는 이 필드가 없어도 code로 해석되어 동작 완전 동일 (설계 §8 :359).
+PROJECT_CLASS="code"
+
 # 루프 제어
 MAX_ITERATIONS=50
 RATE_LIMIT_PER_HOUR=80
