@@ -5,7 +5,7 @@ set -euo pipefail
 # 설계 §5 :214 4단계 흐름 + §5 :235 8개 중복 감지 시나리오 + §7 :302 reviews/approvals mkdir
 # 사용: bash tests/run-smoke-WI-B1.sh
 #
-# 누적 기준선 (WI-001 시점): 180 + 41 = 221 assertion + bats 16 @test
+# 누적 기준선: 180 + 40 = 220 assertion (WI-001 재캘리브레이션 후, WI-B1에서 41→40) + bats 16 @test
 
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8

@@ -73,7 +73,8 @@ bash tests/run-smoke-WI-B1.sh
   ✅ WI-B1 ALL SMOKE PASSED
 ```
 
-**전체 누적**: 기존 221 + WI-B1 smoke 27 = **248 assertion** + bats 16 @test.
+**전체 누적**: 기존 220 + WI-B1 smoke 27 = **247 assertion** + bats 16 @test.
+(내역: test-vault 31 + A1 14 + A2a-e 81 + A3 17 + A4 21 + 001 40 + B1 27 / WI-001은 WI-B1에서 41→40 재캘리브레이션)
 
 ---
 
