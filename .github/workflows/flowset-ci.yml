@@ -62,7 +62,7 @@ jobs:
         run: bash tests/bats/bin/bats tests/bats_tests/core.bats
 
   smoke:
-    name: bash smoke (126 + A3 17 + 001 40 + B1 27 = 210 assertion)
+    name: bash smoke (126 + A3 17 + 001 40 + B1 27 + B2 36 = 246 assertion)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +86,7 @@ jobs:
           bash tests/run-smoke-WI-A3.sh
           bash tests/run-smoke-WI-001.sh
           bash tests/run-smoke-WI-B1.sh
+          bash tests/run-smoke-WI-B2.sh
 
   commit-check:
     name: commit message 형식 (WI-NNN-[type])

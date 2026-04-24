@@ -12,6 +12,13 @@ PROJECT_TYPE=""         # typescript, python, rust, go, etc.
 # 기존 프로젝트는 이 필드가 없어도 code로 해석되어 동작 완전 동일 (설계 §8 :359).
 PROJECT_CLASS="code"
 
+# 실행 모드 (v4.0 WI-B2) — /wi:start Phase 5.95에서 사용자가 선택
+#   loop        : flowset.sh 새 터미널 자동 반복 (code class 기본)
+#   interactive : 세션 내 WI 1개씩 수동 승인 (content class 기본)
+#   team        : lead-workflow 에이전트 spawn, 6단계 (hybrid class 기본)
+# 빈 값이면 PROJECT_CLASS에 따라 자동 매핑되어 하위 호환 유지 (code → loop).
+EXECUTION_MODE=""
+
 # 루프 제어
 MAX_ITERATIONS=50
 RATE_LIMIT_PER_HOUR=80

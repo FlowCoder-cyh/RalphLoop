@@ -370,19 +370,52 @@ tests/
 ### Phase 5.9: Ruleset 설정 (루프 시작 전 보호 활성화)
 
 `.flowsetrc`에서 `GITHUB_ACCOUNT_TYPE`과 `GITHUB_ORG`를 읽어 ruleset을 설정합니다.
+**v4.0 PROJECT_CLASS 조건부**:
+- `code` — 기존 strict ruleset (status checks + merge queue)
+- `content` — 최소 보호만 (CI 없음, non_fast_forward + deletion). status checks 불필요
+- `hybrid` — code 경로 보호 기준 strict ruleset (code + content 동시 운영이지만 main 보호는 code 기준으로 엄격)
 
 ```bash
-# .flowsetrc에서 계정 유형 읽기
+# .flowsetrc에서 계정 유형 + class 읽기
 source .flowsetrc
+PROJECT_CLASS="${PROJECT_CLASS:-code}"
 
 REPO_FULL="${GITHUB_ORG}/${PROJECT_NAME}"
 
-# 브랜치 보호 규칙 (main) — 계정 유형별 자동 분기
-ruleset_ok=false
+# v4.0: PROJECT_CLASS별 조건부 분기
+# content class는 CI/PR 엄격성 없음 → status checks 불필요, non_fast_forward + deletion만
+if [[ "$PROJECT_CLASS" == "content" ]]; then
+  echo "ℹ️ content 프로젝트 — 최소 Ruleset (CI 없음, PR 선택)"
+  gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null || {
+    echo "⚠️ Ruleset 설정 실패 — 로컬 Git hooks로만 보호합니다."
+  }
+{
+  "name": "Protect main (content)",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ]
+}
+RULES
+  echo "🔒 content Ruleset (간소화) 설정 완료"
+else
+  # code 또는 hybrid — 기존 strict ruleset (hybrid는 code 경로 보호 기준)
+  # 브랜치 보호 규칙 (main) — 계정 유형별 자동 분기
+  # 참고: heredoc(<<'RULES')의 종료 마커는 bash 문법상 반드시 column 0에 있어야 하므로,
+  #       else 블록 내부라도 `RULES`만 0-space 유지. 그 외 실행 라인은 +2-space로 일관화.
+  ruleset_ok=false
 
-# 1. Rulesets API 시도 (조직 계정)
-if [[ "${GITHUB_ACCOUNT_TYPE:-}" == "org" ]]; then
-  gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null && ruleset_ok=true
+  # 1. Rulesets API 시도 (조직 계정)
+  if [[ "${GITHUB_ACCOUNT_TYPE:-}" == "org" ]]; then
+    gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null && ruleset_ok=true
 {
   "name": "Protect main",
   "target": "branch",
@@ -423,13 +456,13 @@ if [[ "${GITHUB_ACCOUNT_TYPE:-}" == "org" ]]; then
   ]
 }
 RULES
-fi
+  fi
 
-# 2. 개인 계정 또는 Rulesets 실패 시 → strict: false
-if [[ "$ruleset_ok" != "true" ]]; then
-  gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null || {
-    echo "⚠️ Ruleset 설정 실패 — 로컬 Git hooks로만 보호합니다."
-  }
+  # 2. 개인 계정 또는 Rulesets 실패 시 → strict: false
+  if [[ "$ruleset_ok" != "true" ]]; then
+    gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null || {
+      echo "⚠️ Ruleset 설정 실패 — 로컬 Git hooks로만 보호합니다."
+    }
 {
   "name": "Protect main",
   "target": "branch",
@@ -458,19 +491,105 @@ if [[ "$ruleset_ok" != "true" ]]; then
   ]
 }
 RULES
-fi
+  fi
 
-echo "🔒 Ruleset 설정 완료"
+  echo "🔒 Ruleset 설정 완료 (class=$PROJECT_CLASS)"
+fi
 ```
 
-### Phase 6: 커밋 & FlowSet 시작 안내
+### Phase 5.95: 실행 모드 선택 (v4.0 신설)
+
+PROJECT_CLASS에 따라 기본 실행 모드를 매핑하고, 사용자가 override할 수 있는 선택지를 제공합니다.
+**3모드 (설계 §3 축 Y)**:
+
+| 모드 | 동작 | 기본값이 되는 class |
+|------|------|---------------------|
+| 루프 (loop) | `flowset.sh` 새 터미널 자동 반복 | code |
+| 대화형 (interactive) | 이 세션에서 WI 1개씩 수동 승인 | content |
+| 팀 (team) | `lead-workflow` spawn, 6단계 | hybrid 또는 복잡한 code |
+
+```bash
+source .flowsetrc
+PROJECT_CLASS="${PROJECT_CLASS:-code}"
+
+# PROJECT_CLASS → 기본 모드 자동 매핑 (설계 §3 축 Y)
+case "$PROJECT_CLASS" in
+  code)    DEFAULT_MODE="loop" ;;
+  content) DEFAULT_MODE="interactive" ;;
+  hybrid)  DEFAULT_MODE="team" ;;
+  *)
+    echo "ERROR: 알 수 없는 PROJECT_CLASS='$PROJECT_CLASS' (code|content|hybrid 중 선택)" >&2
+    exit 1
+    ;;
+esac
+
+echo "📋 PROJECT_CLASS=$PROJECT_CLASS → 기본 실행 모드: $DEFAULT_MODE"
+echo ""
+echo "실행 모드 선택:"
+echo "  1) loop        — flowset.sh 새 터미널 자동 반복 (code 기본)"
+echo "  2) interactive — 이 세션에서 WI 1개씩 수동 승인 (content 기본)"
+echo "  3) team        — lead-workflow spawn, 6단계 (hybrid 기본, 복잡한 code도 가능)"
+read -r -p "선택 [Enter=$DEFAULT_MODE]: " MODE_CHOICE
+
+case "${MODE_CHOICE:-}" in
+  1|loop)        EXECUTION_MODE="loop" ;;
+  2|interactive) EXECUTION_MODE="interactive" ;;
+  3|team)        EXECUTION_MODE="team" ;;
+  "")            EXECUTION_MODE="$DEFAULT_MODE" ;;
+  *)
+    echo "ERROR: 알 수 없는 모드 '$MODE_CHOICE' (loop|interactive|team 중 선택)" >&2
+    exit 1
+    ;;
+esac
+
+# 모드 영속화 (Phase 6에서 참조)
+# 필드 존재 시 대체, 없으면 append — 빈 .flowsetrc에서도 정상 동작 (sed만 쓰면 match 없어 조용히 no-op)
+if grep -qE '^EXECUTION_MODE=' .flowsetrc 2>/dev/null; then
+  sed -i.bak -E "s|^EXECUTION_MODE=.*|EXECUTION_MODE=\"${EXECUTION_MODE}\"|" .flowsetrc
+  rm -f .flowsetrc.bak
+else
+  echo "EXECUTION_MODE=\"${EXECUTION_MODE}\"" >> .flowsetrc
+fi
+
+echo "✅ 실행 모드 확정: $EXECUTION_MODE"
+```
+
+**하위 호환**: `.flowsetrc`에 `EXECUTION_MODE` 필드가 없거나 PROJECT_CLASS 미설정 시 자동으로 `code`/`loop`으로 매핑 — 기존 동작 완전 동일.
+
+### Phase 6: 커밋 & 실행 모드별 분기 (v4.0 재구성)
+
+Phase 5.95에서 확정한 `EXECUTION_MODE`에 따라 3가지 경로 중 하나로 진입합니다.
+
+#### 6.0: 공통 커밋 (모든 모드 공통)
 
 ```bash
 # 생성된 파일 커밋
 git add -A
 git commit -m "WI-chore PRD 기반 작업 계획 생성"
-git push origin main
+
+# content class는 GitHub이 선택적 — GITHUB_ACCOUNT_TYPE 있을 때만 push
+source .flowsetrc
+if [[ -n "${GITHUB_ACCOUNT_TYPE:-}" ]]; then
+  git push origin main
+else
+  echo "ℹ️ GITHUB_ACCOUNT_TYPE 미설정 — push 건너뜀 (로컬 커밋만)"
+fi
 ```
+
+#### 6.1: 모드별 분기 (loop / interactive / team)
+
+```bash
+source .flowsetrc
+case "${EXECUTION_MODE:-loop}" in
+  loop)        echo "🔁 루프 모드 — flowset.sh 새 터미널에서 자동 반복 시작" ;;
+  interactive) echo "💬 대화형 모드 — 이 세션에서 WI 1개씩 수동 승인 진행" ;;
+  team)        echo "👥 팀 모드 — lead-workflow 에이전트로 6단계 위임 진행" ;;
+esac
+```
+
+---
+
+### 모드 A: 루프 (loop) — 기존 v3.x 동작 유지
 
 **⚠️ flowset.sh는 절대 이 세션에서 `bash flowset.sh`로 직접 실행하지 않는다.**
 `claude -p`는 Claude Code 세션 안에서 중첩 실행이 불가능하므로,
@@ -582,6 +701,120 @@ esac
   2. WSL (wsl --install)
 ```
 
+---
+
+### 모드 B: 대화형 (interactive) — v4.0 신설
+
+이 세션에서 WI를 **1개씩 수동 승인하며 순차 진행**합니다.
+content 프로젝트 기본값. code 프로젝트에서도 "꼼꼼히 보며 진행하고 싶은 경우" 선택 가능.
+
+**동작 흐름** (리드 Claude가 직접 실행):
+
+1. `fix_plan.md` 미완 WI 목록 로드
+2. 각 WI마다 다음 루프 반복:
+   - a. WI 메타데이터 읽기 (L1/L2/L3 + 타입)
+   - b. 사용자에게 질문: "WI-NNN {작업명} 진행할까요? [Y/n/s=skip/q=quit]"
+   - c. 동의 시 브랜치 생성 → 구현 → 검증 → 커밋 → PR 생성 (또는 로컬 커밋만)
+   - d. 완료 후 사용자 승인 요청 (diff 보여주고 머지 여부 확인)
+   - e. 승인 시 fix_plan.md 체크박스 업데이트 → main으로 복귀 → 다음 WI
+3. 전체 완료 또는 사용자가 q 입력 시 종료
+
+**content 프로젝트 특화 동작**:
+- PR 생성 선택적 (GITHUB_ACCOUNT_TYPE 미설정 시 로컬 커밋만)
+- 검증은 content contracts(style-guide.md, review-rubric.md — WI-B3에서 추가) 기준
+- reviewer≥1 파일 증거(`.flowset/reviews/{section}-{reviewer}.md`) 확인
+
+**의사코드 (셸 루프 골격)**:
+```bash
+source .flowsetrc
+PROJECT_CLASS="${PROJECT_CLASS:-code}"
+
+# fix_plan.md에서 미완 WI 추출
+mapfile -t PENDING < <(grep -E '^- \[ \] WI-' .flowset/fix_plan.md)
+
+for wi_line in "${PENDING[@]}"; do
+  wi_id=$(echo "$wi_line" | sed -E 's/^- \[ \] (WI-[0-9]+).*/\1/')
+  wi_desc=$(echo "$wi_line" | sed -E 's/^- \[ \] WI-[0-9]+-[a-z]+ ([^|]+).*/\1/')
+
+  read -r -p "${wi_id} ${wi_desc} 진행할까요? [Y/n/s/q]: " ans
+  case "${ans:-Y}" in
+    [Nn]|[Nn][Oo]) echo "  → 건너뜀"; continue ;;
+    [Ss]|[Ss][Kk][Ii][Pp]) echo "  → 건너뜀"; continue ;;
+    [Qq]|[Qq][Uu][Ii][Tt]) echo "  → 종료"; break ;;
+  esac
+
+  # 실제 구현은 리드 Claude가 아래 도구 체인으로 직접 수행 (아래 상세)
+  echo "  ✅ $wi_id 완료 (브랜치 머지 후 다음 WI)"
+done
+
+echo "💬 대화형 모드 종료 — fix_plan.md 상태를 확인하세요"
+```
+
+**WI 1개당 실행 도구 체인 (리드 Claude 직접 수행, class별 분기)**:
+
+| 단계 | 도구 | code/hybrid class | content class |
+|------|------|------------------|---------------|
+| a. 브랜치 생성 | `Bash` | `git checkout main && git pull && git checkout -b feature/{WI}-{type}-{kebab}` | 동일 (GITHUB_ACCOUNT_TYPE 미설정이면 push만 생략) |
+| b. 관련 파일 읽기 | `Read` / `Grep` | src/** 관련 코드 | docs/** 관련 문서 + 출처 URL |
+| c. 구현 | `Edit` / `Write` | 코드 변경 + 타입 동기화 | 문서 초안 + 참고자료 링크 |
+| d. 검증 | `Bash` | `npm test` / `cargo test` / `pytest` + 린트 | `.flowset/reviews/{section}-{reviewer}.md` 작성 + completeness_checklist 전체 done 확인 |
+| e. 커밋 | `Bash` | `git add -A && git commit -m "WI-NNN-type 한글 작업명"` | 동일 |
+| f. PR 생성 | `Bash` | `gh pr create --base main --title "..." --body "..."` | GITHUB_ACCOUNT_TYPE 있을 때만. 없으면 로컬 커밋만 |
+| g. 사용자 승인 | `AskUserQuestion` | diff 요약 제시 후 머지 여부 확인 | 동일 |
+| h. 머지 | `Bash` | `gh pr merge --squash --delete-branch` 또는 `bash .flowset/scripts/enqueue-pr.sh` | GITHUB 없으면 `git checkout main && git merge --ff-only {branch}` |
+| i. fix_plan 업데이트 | `Edit` | `- [ ] WI-NNN` → `- [x] WI-NNN` | 동일 |
+| j. 다음 WI | (루프) | main으로 복귀 후 다음 WI | 동일 |
+
+**content class 검증 상세 (d단계)**:
+- `.flowset/reviews/{section}-{reviewer}.md` 파일 존재 확인 (1차 판정 — 파일 방식 필수)
+- `.flowset/approvals/{section}-{approver}.md` 파일 확인 (approver 승인 WI인 경우)
+- 출처 URL 누락 감지 (Stop hook의 `stop-rag-check.sh` content 분기 — WI-C3-content 이후)
+
+**code class 검증 상세 (d단계)**:
+- lint + build + test (AGENT.md에 정의된 명령)
+- API 수정 시 api-standard.md 응답 형식 준수 확인
+- 테스트 커버리지(검증 에이전트가 자동 감지)
+
+---
+
+### 모드 C: 팀 (team) — v4.0 신설
+
+`lead-workflow` 에이전트를 spawn하여 **6단계 위임 워크플로우**로 진행합니다.
+hybrid 프로젝트 기본값. 복잡한 code 프로젝트에서도 선택 가능.
+
+**사전 조건**:
+- `.claude/agents/lead-workflow.md` 존재 (v3.2 그대로 유지 — 3모드 호출 주체 이미 정의됨)
+- `.flowset/ownership.json` 존재 (WI-B1 Step 3.5에서 생성됨)
+- `.claude/rules/team-roles.md` 존재 (class별 역할 매핑)
+
+**동작**:
+
+```
+Agent(
+  subagent_type: "lead-workflow",
+  description: "Lead orchestrates team for PRD WIs",
+  prompt: "프로젝트: {PROJECT_NAME} (class=${PROJECT_CLASS})
+
+  .flowset/fix_plan.md의 미완 WI 전체를 6단계 워크플로우로 진행하세요:
+  1. 요구사항 파악 (.flowset/requirements.md + contracts/)
+  2. 복잡도 분석 + 팀 규모 결정
+  3. 태스크 분해 + 의존성 설정
+  3.5. 스프린트 계약 협상
+  4. 팀 관리 (생성 또는 재사용)
+  5. 구현 위임 (SendMessage)
+  6. 결과 통합 + PR 생성
+
+  class=${PROJECT_CLASS}에 따라:
+  - code: frontend/backend/qa/devops/planning 팀 구성
+  - content: writer/reviewer/approver/designer/shared 팀 구성
+  - hybrid: 양쪽 혼합 (ownership.json.teams[].class 참조)"
+)
+```
+
+**주의**: `lead-workflow` 에이전트는 `Edit`/`Write` disallowed — 직접 코드 수정하지 않고 팀원(`Agent`)에 위임합니다.
+
+---
+
 ## 출력 형식
 
 ```
@@ -600,8 +833,19 @@ esac
   - test: {N}개
   - chore: {N}개
 
+📋 PROJECT_CLASS={code|content|hybrid} → 기본 실행 모드: {loop|interactive|team}
+✅ 실행 모드 확정: {EXECUTION_MODE}
+
+# 모드별 출력 분기:
+# — loop 모드:
 🚀 FlowSet이 새 터미널 창에서 시작되었습니다!
    열린 터미널 창에서 진행 상황을 확인하세요.
+
+# — interactive 모드:
+💬 대화형 모드 시작 — WI 1개씩 승인하며 진행합니다.
+
+# — team 모드:
+👥 팀 모드 시작 — lead-workflow 에이전트를 spawn합니다.
 ```
 
 ## Boundaries
@@ -614,7 +858,9 @@ esac
 
 **Will Not:**
 - 사용자 확인 없이 MCP 서버 설치
-- 실제 코드 구현 (FlowSet이 담당)
+- 실제 코드 구현 (loop/interactive/team 각 모드별 주체가 담당)
 - PRD 내용 임의 수정
 - `--dangerously-skip-permissions` 사용 (보안상 --allowedTools 사용)
-- **flowset.sh를 `bash flowset.sh`로 이 세션에서 직접 실행** (claude -p 중첩 불가 → 새 터미널 창 자동 오픈)
+- **flowset.sh를 `bash flowset.sh`로 이 세션에서 직접 실행** (claude -p 중첩 불가 → 새 터미널 창 자동 오픈. 단 loop 모드에서만 flowset.sh 호출)
+- content 프로젝트에 무조건 CI/merge queue 강제 (Phase 5.9 class별 분기로 해소)
+- PROJECT_CLASS 무시하고 기본 모드 자동 매핑 없이 항상 loop 강제 (v3.x 경직성 C1 해소)
