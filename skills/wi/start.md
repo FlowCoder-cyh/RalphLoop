@@ -409,11 +409,13 @@ RULES
 else
   # code 또는 hybrid — 기존 strict ruleset (hybrid는 code 경로 보호 기준)
   # 브랜치 보호 규칙 (main) — 계정 유형별 자동 분기
+  # 참고: heredoc(<<'RULES')의 종료 마커는 bash 문법상 반드시 column 0에 있어야 하므로,
+  #       else 블록 내부라도 `RULES`만 0-space 유지. 그 외 실행 라인은 +2-space로 일관화.
   ruleset_ok=false
 
   # 1. Rulesets API 시도 (조직 계정)
   if [[ "${GITHUB_ACCOUNT_TYPE:-}" == "org" ]]; then
-  gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null && ruleset_ok=true
+    gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null && ruleset_ok=true
 {
   "name": "Protect main",
   "target": "branch",
@@ -454,13 +456,13 @@ else
   ]
 }
 RULES
-fi
+  fi
 
-# 2. 개인 계정 또는 Rulesets 실패 시 → strict: false
-if [[ "$ruleset_ok" != "true" ]]; then
-  gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null || {
-    echo "⚠️ Ruleset 설정 실패 — 로컬 Git hooks로만 보호합니다."
-  }
+  # 2. 개인 계정 또는 Rulesets 실패 시 → strict: false
+  if [[ "$ruleset_ok" != "true" ]]; then
+    gh api --method POST "repos/${REPO_FULL}/rulesets" --input - <<'RULES' 2>/dev/null || {
+      echo "⚠️ Ruleset 설정 실패 — 로컬 Git hooks로만 보호합니다."
+    }
 {
   "name": "Protect main",
   "target": "branch",
@@ -722,7 +724,7 @@ content 프로젝트 기본값. code 프로젝트에서도 "꼼꼼히 보며 진
 - 검증은 content contracts(style-guide.md, review-rubric.md — WI-B3에서 추가) 기준
 - reviewer≥1 파일 증거(`.flowset/reviews/{section}-{reviewer}.md`) 확인
 
-**의사코드**:
+**의사코드 (셸 루프 골격)**:
 ```bash
 source .flowsetrc
 PROJECT_CLASS="${PROJECT_CLASS:-code}"
@@ -741,13 +743,37 @@ for wi_line in "${PENDING[@]}"; do
     [Qq]|[Qq][Uu][Ii][Tt]) echo "  → 종료"; break ;;
   esac
 
-  # 브랜치 생성 + 구현 + 검증 + 커밋 + 승인 (리드 Claude가 직접 수행)
-  # 구현 상세는 /wi:* 도구 체인 통해 수행
+  # 실제 구현은 리드 Claude가 아래 도구 체인으로 직접 수행 (아래 상세)
   echo "  ✅ $wi_id 완료 (브랜치 머지 후 다음 WI)"
 done
 
 echo "💬 대화형 모드 종료 — fix_plan.md 상태를 확인하세요"
 ```
+
+**WI 1개당 실행 도구 체인 (리드 Claude 직접 수행, class별 분기)**:
+
+| 단계 | 도구 | code/hybrid class | content class |
+|------|------|------------------|---------------|
+| a. 브랜치 생성 | `Bash` | `git checkout main && git pull && git checkout -b feature/{WI}-{type}-{kebab}` | 동일 (GITHUB_ACCOUNT_TYPE 미설정이면 push만 생략) |
+| b. 관련 파일 읽기 | `Read` / `Grep` | src/** 관련 코드 | docs/** 관련 문서 + 출처 URL |
+| c. 구현 | `Edit` / `Write` | 코드 변경 + 타입 동기화 | 문서 초안 + 참고자료 링크 |
+| d. 검증 | `Bash` | `npm test` / `cargo test` / `pytest` + 린트 | `.flowset/reviews/{section}-{reviewer}.md` 작성 + completeness_checklist 전체 done 확인 |
+| e. 커밋 | `Bash` | `git add -A && git commit -m "WI-NNN-type 한글 작업명"` | 동일 |
+| f. PR 생성 | `Bash` | `gh pr create --base main --title "..." --body "..."` | GITHUB_ACCOUNT_TYPE 있을 때만. 없으면 로컬 커밋만 |
+| g. 사용자 승인 | `AskUserQuestion` | diff 요약 제시 후 머지 여부 확인 | 동일 |
+| h. 머지 | `Bash` | `gh pr merge --squash --delete-branch` 또는 `bash .flowset/scripts/enqueue-pr.sh` | GITHUB 없으면 `git checkout main && git merge --ff-only {branch}` |
+| i. fix_plan 업데이트 | `Edit` | `- [ ] WI-NNN` → `- [x] WI-NNN` | 동일 |
+| j. 다음 WI | (루프) | main으로 복귀 후 다음 WI | 동일 |
+
+**content class 검증 상세 (d단계)**:
+- `.flowset/reviews/{section}-{reviewer}.md` 파일 존재 확인 (1차 판정 — 파일 방식 필수)
+- `.flowset/approvals/{section}-{approver}.md` 파일 확인 (approver 승인 WI인 경우)
+- 출처 URL 누락 감지 (Stop hook의 `stop-rag-check.sh` content 분기 — WI-C3-content 이후)
+
+**code class 검증 상세 (d단계)**:
+- lint + build + test (AGENT.md에 정의된 명령)
+- API 수정 시 api-standard.md 응답 형식 준수 확인
+- 테스트 커버리지(검증 에이전트가 자동 감지)
 
 ---
 
