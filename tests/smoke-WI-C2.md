@@ -19,8 +19,8 @@ WI-C2 변경이 기존 누적 smoke를 깨뜨리지 않고, `templates/.flowset/
    - 검증 방법 5건: parse-gherkin.sh 호출, jq matrix.json entities/sections 조회, .flowset/reviews/, .flowset/approvals/ 파일 존재
    - 제약 4건: 자유 텍스트 금지, matrix.json 외 entity/section 신설 금지, verify_matrix_cells 차단, sources 0건/reviewer 파일 부재 차단
    - 평가 type 4종: code | content | hybrid | visual (기존 code|visual 2종에서 확장 — WI-C4 evaluator type 신설 예약)
-2. **`tests/run-smoke-WI-C2.sh`** 신규 (39 assertion, 7 블록)
-3. **`.github/workflows/flowset-ci.yml`** smoke job: 341 → 380 assertion (`run-smoke-WI-C2.sh` 등록)
+2. **`tests/run-smoke-WI-C2.sh`** 신규 (42 assertion, 7 블록)
+3. **`.github/workflows/flowset-ci.yml`** smoke job: 341 → 383 assertion (`run-smoke-WI-C2.sh` 등록)
 
 ---
 
@@ -44,7 +44,7 @@ WI-C2 변경이 기존 누적 smoke를 깨뜨리지 않고, `templates/.flowset/
 | WI-C2-5 | 평가 type 4종 + 검증 방법 + 제약 (4종 / WI-C4 예약 / content 가중치 5축 / 검증 5건 / 제약 3건) | 5 |
 | WI-C2-6 | matrix.json (WI-C1 SSOT) 정합성 (파일 존재 / entity 키 정합 / section 키 정합 / 3-state 일관 / role 어휘 정합) | 5 |
 | WI-C2-7 | 학습 전이 회귀 방지 (패턴 2/3/4/19/23 — Gherkin 어휘 일관) | 5 |
-| **합계** | | **39** |
+| **합계** | | **42** |
 
 ### 핵심 정합 검증 (WI-C2-6)
 
@@ -70,14 +70,14 @@ bash tests/run-smoke-WI-C2.sh
 
 **예상 출력 요약**:
 ```
-  PASS: 39
+  PASS: 42
   FAIL: 0
   ✅ WI-C2 ALL SMOKE PASSED
 ```
 
 **전체 누적 (SSOT = `.github/workflows/flowset-ci.yml` smoke job name)**:
-- **CI SSOT**: test-vault 31 + A1 14 + A2a-e 81 (13+13+15+16+24) + A3 17 + 001 40 + B1 27 + B2 36 + B3 35 + C1 60 + **C2 39** = **380 assertion**
-- **로컬 regression (A4 포함)**: 380 + 21 = **401 assertion**
+- **CI SSOT**: test-vault 31 + A1 14 + A2a-e 81 (13+13+15+16+24) + A3 17 + 001 40 + B1 27 + B2 36 + B3 35 + C1 60 + **C2 42** = **383 assertion**
+- **로컬 regression (A4 포함)**: 383 + 21 = **404 assertion**
 - **bats core.bats**: 16 @test (class 무관)
 
 ---

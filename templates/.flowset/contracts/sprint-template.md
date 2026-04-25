@@ -54,7 +54,7 @@ Feature: Leave Request Management
       | start_date | end_date   | status | message              |
       | 2026-12-01 | 2026-11-30 | 400    | end before start     |
       | 2026-13-01 | 2026-12-31 | 400    | invalid month        |
-      | 2026-12-01 | 2026-12-01 | 201    | same-day allowed     |
+      | 2026-12-01 | 2026-12-32 | 400    | invalid day          |
 ```
 
 ```gherkin

@@ -140,6 +140,32 @@ else
   fail "Examples 합산 규칙 누락"
 fi
 
+# 9. 1차 평가 LOW: Scenario Outline Examples self-consistency
+# 시나리오 이름 "Reject invalid"는 모든 Examples 행이 invalid 의도여야 정합.
+# WI-B3 패턴 23 정신: status=201/Reject 의도 모순 행 잔존 거부.
+# 마지막 행 의도 모순(예: same-day allowed) 회귀 시 즉시 FAIL.
+if awk '
+  /Scenario Outline: Reject/ {in_outline=1; next}
+  in_outline && /^      \| / && !/^      \| start_date/ {
+    # 데이터 행에서 status 컬럼 추출 (4번째 |)
+    n = split($0, fields, /\|/)
+    status = fields[4]
+    msg = fields[5]
+    gsub(/^[ \t]+|[ \t]+$/, "", status)
+    gsub(/^[ \t]+|[ \t]+$/, "", msg)
+    # Reject Outline에서 status=201은 의도 모순
+    if (status == "201") { exit_code=1; print "INTENT_VIOLATION: status=201 in Reject Outline (msg=" msg ")" }
+    # message에 allowed/valid가 있으면서 Reject Outline이면 의도 모순
+    if (msg ~ /allowed|^valid/) { exit_code=1; print "INTENT_VIOLATION: allowed/valid in Reject Outline (msg=" msg ")" }
+  }
+  in_outline && /^```$/ {exit exit_code+0}
+  END {exit exit_code+0}
+' "$SPRINT_MD"; then
+  pass "패턴 23: Scenario Outline 'Reject' Examples 의도 정합 (모든 행이 invalid case)"
+else
+  fail "패턴 23: Scenario Outline 의도 모순 발견 (Reject Outline에 allowed/valid 행)"
+fi
+
 # ============================================================================
 echo ""
 echo "=== WI-C2-3: CRUD 매트릭스 (code/hybrid) ==="
@@ -254,6 +280,21 @@ else
   fail "content 가중치 부족"
 fi
 
+# 3b. 1차 평가 LOW: 가중치 산술 합계 100 self-consistency (WI-B3 패턴 23)
+# code 30+25+25+20=100, content 25+25+20+15+15=100, visual 25+30+25+20=100
+# 미래 PR이 가중치 변경 시 산술이 100을 깨뜨리면 즉시 FAIL
+sum_code=$(grep -oE '기능완성도\([0-9]+%\) / 코드품질\([0-9]+%\) / 테스트\([0-9]+%\) / 계약준수\([0-9]+%\)' "$SPRINT_MD" \
+  | grep -oE '[0-9]+' | awk '{s+=$1} END {print s}')
+sum_content=$(grep -oE '사실성 [0-9]+ / 완결성 [0-9]+ / 명료성 [0-9]+ / 일관성 [0-9]+ / 출처 [0-9]+' "$SPRINT_MD" \
+  | grep -oE '[0-9]+' | awk '{s+=$1} END {print s}')
+sum_visual=$(grep -oE '디자인품질\([0-9]+%\) / 독창성\([0-9]+%\) / 기술완성도\([0-9]+%\) / 정확성\([0-9]+%\)' "$SPRINT_MD" \
+  | grep -oE '[0-9]+' | awk '{s+=$1} END {print s}')
+if [[ "$sum_code" == "100" ]] && [[ "$sum_content" == "100" ]] && [[ "$sum_visual" == "100" ]]; then
+  pass "패턴 23: type 4종 가중치 산술 합계 100 (code=$sum_code / content=$sum_content / visual=$sum_visual)"
+else
+  fail "패턴 23: 가중치 합계 산술 위반 (code=$sum_code / content=$sum_content / visual=$sum_visual, 기대 모두 100)"
+fi
+
 # 4. 검증 방법 (parse-gherkin.sh + jq matrix.json + reviews/approvals)
 verify_hit=0
 for v in 'parse-gherkin\.sh' "jq '.entities" "jq '.sections" '\.flowset/reviews/' '\.flowset/approvals/'; do
@@ -305,6 +346,24 @@ if grep -qE "\| \{${matrix_content_keys}\}" "$SPRINT_MD"; then
   pass "sprint-template section 예시 키 ($matrix_content_keys) ↔ matrix.json _schema_content 일치"
 else
   fail "section 키 정합 깨짐 (matrix.json: $matrix_content_keys)"
+fi
+
+# 3b. 1차 평가 LOW: matrix.json _schema_hybrid example_root_skeleton 키 정합
+# _schema_code/_schema_content와 동일한 키(Leave, 3.2-User-Flow)를 hybrid skeleton도 사용해야
+# sprint-template의 hybrid 분기 정합이 SSOT 단일성으로 유지됨
+hybrid_entity_key=$(jq -r '._schema_hybrid.example_root_skeleton.entities | keys[0]' "$MATRIX_JSON")
+hybrid_section_key=$(jq -r '._schema_hybrid.example_root_skeleton.sections | keys[0]' "$MATRIX_JSON")
+# _comment 키는 무시 — 실제 entity/section 키만 추출
+if [[ "$hybrid_entity_key" == "_comment" ]]; then
+  hybrid_entity_key=$(jq -r '._schema_hybrid.example_root_skeleton.entities | keys[1]' "$MATRIX_JSON")
+fi
+if [[ "$hybrid_section_key" == "_comment" ]]; then
+  hybrid_section_key=$(jq -r '._schema_hybrid.example_root_skeleton.sections | keys[1]' "$MATRIX_JSON")
+fi
+if [[ "$hybrid_entity_key" == "$matrix_code_keys" ]] && [[ "$hybrid_section_key" == "$matrix_content_keys" ]]; then
+  pass "_schema_hybrid skeleton 키 정합 (entity=$hybrid_entity_key=Leave, section=$hybrid_section_key=3.2-User-Flow — _schema_code/_schema_content와 동일)"
+else
+  fail "_schema_hybrid skeleton 키 ↔ _schema_code/_schema_content 불일치 (hybrid_entity=$hybrid_entity_key vs code=$matrix_code_keys, hybrid_section=$hybrid_section_key vs content=$matrix_content_keys)"
 fi
 
 # 4. status 3-state (missing/pending/done) 일관 사용
