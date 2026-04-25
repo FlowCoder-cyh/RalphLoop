@@ -27,6 +27,17 @@ changed_files+=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
 
 issues=()
 
+# ============================================================================
+# v4.0 (WI-C3-code): 매트릭스 기반 검증 게이트웨이
+# ============================================================================
+# 설계 §5 :224 + §4 :109-117 (B2/B3/B4 차단) 이행:
+# - HAS_MATRIX 플래그로 matrix.json 부재 시 신규 섹션 6/7/8 skip (하위 호환)
+# - 기존 섹션 1~5는 가드 없음 → 기존 동작 그대로 유지
+# - WI-C5/C6와 동일 SSOT 패턴 (.flowset/spec/matrix.json)
+HAS_MATRIX=true
+MATRIX_FILE=".flowset/spec/matrix.json"
+[[ -f "$MATRIX_FILE" ]] || HAS_MATRIX=false
+
 # 1. RAG 업데이트 검사
 if [[ -d ".claude/memory/rag" ]]; then
   rag_needed=false
@@ -80,6 +91,146 @@ if [[ -f ".flowset/scripts/verify-requirements.sh" && -f ".flowset/requirements.
       issues+=("검증 에이전트: 요구사항 누락 감지 — $verify_output")
     fi
   fi
+fi
+
+# ============================================================================
+# 6. 타입 중복 검사 (B3 — WI-C3-code)
+# ============================================================================
+# 설계 §4 :115 — 변경 파일에서 interface|type|class {Name} 선언 추출 후
+# 같은 이름이 다른 파일 2개 이상에서 선언되면 block. 단 *.test.*/*.spec.*/__tests__/tests/ 경로 제외.
+# TypeScript interface merging(동일 module 내 의도적 중복)은 본 검사 범위 외 — 다른 파일이면 다른 모듈 가정.
+if [[ "$HAS_MATRIX" == "true" ]]; then
+  changed_code_files=$(echo "$changed_files" \
+    | grep -E '\.(ts|tsx|js|jsx|py|go|rs)$' \
+    | grep -vE '(^|/)(tests?|spec|__tests__|e2e)/' \
+    | grep -vE '\.(test|spec)\.(ts|tsx|js|jsx)$' \
+    | sort -u \
+    || true)
+
+  if [[ -n "$changed_code_files" ]]; then
+    declarations=""
+    for cf in $changed_code_files; do
+      [[ ! -f "$cf" ]] && continue
+      file_decls=$(grep -nE '^[[:space:]]*(export[[:space:]]+)?(interface|type|class)[[:space:]]+[A-Z][A-Za-z0-9_]*' "$cf" 2>/dev/null \
+        | sed -E 's/^[0-9]+:[[:space:]]*(export[[:space:]]+)?(interface|type|class)[[:space:]]+([A-Z][A-Za-z0-9_]*).*/\3/' \
+        | sort -u || true)
+      while IFS= read -r decl; do
+        [[ -z "$decl" ]] && continue
+        declarations+="${decl}	${cf}"$'\n'
+      done <<< "$file_decls"
+    done
+
+    # 같은 이름이 다른 파일 2개+ 등장하는지 확인 (awk 그룹화)
+    duplicates=$(echo "$declarations" | sort -u | awk -F'\t' '
+      NF == 2 && $1 != "" {
+        names[$1]++
+        files[$1] = files[$1] " " $2
+      }
+      END {
+        for (n in names) if (names[n] > 1) print n "\t" files[n]
+      }
+    ')
+    while IFS=$'\t' read -r dup_name dup_files; do
+      [[ -z "$dup_name" ]] && continue
+      issues+=("타입 중복 감지 (B3): ${dup_name} —${dup_files} (다른 파일 ${dup_files##* /}+ 선언, 단일 SSOT 모듈로 통합 필요)")
+    done <<< "$duplicates"
+  fi
+fi
+
+# ============================================================================
+# 7. auth middleware 검사 (B2 — WI-C3-code)
+# ============================================================================
+# 설계 §4 :114 — src/api/** 또는 src/app/api/** 수정 시 matrix.json.auth_patterns[]에 등록된
+# 패턴을 모두 grep, 하나도 매칭 안 되면 block. 정규식 OR 매칭(framework 무관 — | join).
+if [[ "$HAS_MATRIX" == "true" ]]; then
+  changed_api_files=$(echo "$changed_files" \
+    | grep -E '^src/(api|app/api)/.*\.(ts|tsx|js|jsx|py|go|rs)$' \
+    | grep -vE '\.(test|spec)\.(ts|tsx|js|jsx)$' \
+    | sort -u \
+    || true)
+
+  if [[ -n "$changed_api_files" ]]; then
+    # tr -d '\r' — Windows jq.exe stdout CRLF 정합 (Linux jq는 LF, tr 무영향)
+    auth_patterns=$(jq -r '(.auth_patterns // [])[]' "$MATRIX_FILE" 2>/dev/null | tr -d '\r' || true)
+    if [[ -z "$auth_patterns" ]]; then
+      issues+=("auth middleware 검증 불가 (B2): matrix.json.auth_patterns[] 비어있음 — /wi:prd Step 2.5에서 auth_framework 등록 필요")
+    else
+      auth_regex=$(echo "$auth_patterns" | tr '\n' '|' | sed 's/|$//')
+      for af in $changed_api_files; do
+        [[ ! -f "$af" ]] && continue
+        if ! grep -qE "$auth_regex" "$af" 2>/dev/null; then
+          issues+=("auth middleware 누락 (B2): $af — auth_patterns 중 어느 것도 매칭 안 됨 (정규식: $auth_regex). 인증 우회 위험")
+        fi
+      done
+    fi
+  fi
+fi
+
+# ============================================================================
+# 8. Gherkin↔테스트 매칭 (B4 — WI-C3-code)
+# ============================================================================
+# 설계 §4 :116 — parse-gherkin.sh로 total_count 계산 + scenarios[].name 추출 → 대응 테스트 파일의
+# test()/it() 블록 수와 비교 + 이름 부분 매칭(정규화 후). 단순 개수 비교 금지 — 이름 매칭도 강제.
+# 1순위: cucumber CLI(npm 환경) — 본 hook은 fallback parse-gherkin.sh 우선. 동일 출력 계약.
+if [[ "$HAS_MATRIX" == "true" && -f ".flowset/scripts/parse-gherkin.sh" ]]; then
+  changed_feature_files=$(echo "$changed_files" \
+    | grep -E '\.feature$' \
+    | sort -u \
+    || true)
+
+  for ff in $changed_feature_files; do
+    [[ ! -f "$ff" ]] && continue
+
+    # tr -d '\r' — Windows jq.exe stdout CRLF 정합 (parse-gherkin.sh JSON + jq -r 모두)
+    parser_output=$(bash .flowset/scripts/parse-gherkin.sh "$ff" 2>/dev/null | tr -d '\r' || echo '{}')
+    gherkin_total=$(echo "$parser_output" | jq -r '.total_count // 0' | tr -d '\r')
+    gherkin_names=$(echo "$parser_output" | jq -r '.scenarios[].name // empty' | tr -d '\r')
+
+    # matrix.entities[].gherkin[]에서 본 feature 파일 매칭하는 entity의 tests[] 추출
+    test_files=$(jq -r --arg ff "$ff" '
+      [.entities // {} | to_entries[] |
+       select((.value.gherkin // []) | any(. == $ff)) |
+       .value.tests // [] | .[]
+      ] | .[]
+    ' "$MATRIX_FILE" 2>/dev/null | tr -d '\r' || true)
+
+    [[ -z "$test_files" ]] && continue
+
+    # 각 테스트 파일에서 test()/it() 블록 수 + 이름 추출
+    test_count=0
+    test_names=""
+    for tf in $test_files; do
+      [[ ! -f "$tf" ]] && continue
+      tf_count=$(grep -cE '(^|[^a-zA-Z_])(test|it)\(' "$tf" 2>/dev/null || echo "0")
+      test_count=$((test_count + tf_count))
+      tf_names=$(grep -oE '(test|it)\([\"'"'"'][^\"'"'"']+' "$tf" 2>/dev/null \
+        | sed -E 's/^(test|it)\([\"'"'"']//' \
+        | tr '[:upper:]' '[:lower:]' \
+        | tr -s '[:space:]' ' ' \
+        | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+      test_names+="$tf_names"$'\n'
+    done
+
+    # 개수 비교
+    if (( gherkin_total != test_count )); then
+      issues+=("Gherkin↔테스트 개수 불일치 (B4): $ff (Gherkin=${gherkin_total}, tests=${test_count}) — 시나리오 수와 테스트 수 일치 필요")
+    fi
+
+    # 이름 부분 매칭 — Gherkin scenario 이름이 test 이름의 부분 문자열이어야 함 (정규화 후)
+    # gherkin_names를 array로 변환 후 nested for loop — bash here-string 변수 처리 안정성 확보
+    gherkin_names_arr=()
+    while IFS= read -r _gn; do
+      [[ -n "$_gn" ]] && gherkin_names_arr+=("$_gn")
+    done <<< "$gherkin_names"
+
+    for gname in "${gherkin_names_arr[@]}"; do
+      [[ -z "$gname" ]] && continue
+      # printf로 trailing newline 제어 + grep -qF로 fixed-string contains 검사
+      if ! printf '%s' "$test_names" | grep -qF -- "$gname"; then
+        issues+=("Gherkin 시나리오 미매핑 (B4): \"${gname}\" → 대응 테스트 이름에 미포함 (부분 문자열 매칭 실패)")
+      fi
+    done
+  done
 fi
 
 # 5. v3.0: Vault 세션 맥락 저장 (루프/대화형/팀 범용)
