@@ -233,6 +233,68 @@ if [[ "$HAS_MATRIX" == "true" && -f ".flowset/scripts/parse-gherkin.sh" ]]; then
   done
 fi
 
+# ============================================================================
+# 9. 출처 URL/파일 존재 검증 (B6 — WI-C3-content)
+# ============================================================================
+# 설계 §4 :141-146 + §5 :224 + §7 :317 — content 경로 변경 시
+# matrix.sections[].sources[] 모두 존재 검증.
+# - URL(http/https): 외부 호출 금지(Stop hook 성능 가드) → 형식 정적 검증만
+# - 파일 경로: [[ -f ]] 존재 검증
+# 변경 파일 분류 정규식은 WI-C5와 동일(`^(docs|content|research)/.*\.확장자$`) — SSOT 단일성.
+# changed_content_files는 섹션 10에서 재사용 (한 번만 산출).
+if [[ "$HAS_MATRIX" == "true" ]]; then
+  changed_content_files=$(echo "$changed_files" \
+    | grep -E '^(docs|content|research)/.*\.(md|mdx|markdown|txt|rst)$' \
+    | sort -u \
+    || true)
+
+  if [[ -n "$changed_content_files" ]]; then
+    # 학습 31: jq -r 결과에 tr -d '\r' (Windows jq.exe stdout CRLF 정합)
+    while IFS=$'\t' read -r section_key source_ref; do
+      [[ -z "$section_key" || -z "$source_ref" ]] && continue
+      # URL은 형식만 검증 (HTTP 호출 금지)
+      if [[ "$source_ref" =~ ^https?:// ]]; then
+        if [[ ! "$source_ref" =~ ^https?://[^[:space:]/]+ ]]; then
+          issues+=("출처 URL 형식 위반 (B6): section=${section_key} URL=\"${source_ref}\" — http(s)://host 형태 필요")
+        fi
+        continue
+      fi
+      # 파일 경로: 존재 검증
+      if [[ ! -f "$source_ref" ]]; then
+        issues+=("출처 파일 누락 (B6): section=${section_key} sources=\"${source_ref}\" — 매트릭스 등록 파일 미존재")
+      fi
+    done < <(jq -r '.sections // {} | to_entries[] | .key as $k | (.value.sources // [])[] | [$k, .] | @tsv' "$MATRIX_FILE" 2>/dev/null | tr -d '\r' || true)
+  fi
+fi
+
+# ============================================================================
+# 10. completeness_checklist 본문 등장 검증 (B7 — WI-C3-content)
+# ============================================================================
+# 설계 §4 :141-146 + §7 :317 — content 경로 변경 시
+# matrix.sections[].completeness_checklist 항목이 변경된 content 파일들 중
+# 적어도 한 파일에는 등장(union grep). fixed-string(grep -F)로 메타문자 안전.
+# 항목 1개라도 어디에도 등장 안 하면 issue 누적.
+if [[ "$HAS_MATRIX" == "true" ]]; then
+  # 섹션 9에서 산출한 changed_content_files 재사용 (set -u 방어 — 빈 변수 안전)
+  changed_content_files="${changed_content_files:-}"
+  if [[ -n "$changed_content_files" ]]; then
+    while IFS=$'\t' read -r section_key item; do
+      [[ -z "$section_key" || -z "$item" ]] && continue
+      found=false
+      for cf in $changed_content_files; do
+        [[ ! -f "$cf" ]] && continue
+        if grep -qF -- "$item" "$cf" 2>/dev/null; then
+          found=true
+          break
+        fi
+      done
+      if [[ "$found" == "false" ]]; then
+        issues+=("completeness_checklist 미등장 (B7): section=${section_key} 항목=\"${item}\" — 변경된 content 파일 본문에 미등장")
+      fi
+    done < <(jq -r '.sections // {} | to_entries[] | .key as $k | (.value.completeness_checklist // [])[] | [$k, .] | @tsv' "$MATRIX_FILE" 2>/dev/null | tr -d '\r' || true)
+  fi
+fi
+
 # 5. v3.0: Vault 세션 맥락 저장 (루프/대화형/팀 범용)
 if [[ -f ".flowsetrc" ]]; then
   source .flowsetrc 2>/dev/null || true
