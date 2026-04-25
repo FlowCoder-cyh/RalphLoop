@@ -527,13 +527,14 @@ cat > "$WORK/.flowset/spec/matrix.json" <<'EOF'
 EOF
 
 pushd "$WORK" > /dev/null
-HAS_MATRIX=true
-MATRIX_FILE=".flowset/spec/matrix.json"
+# WI-C5-9 블록: source된 함수가 변수 사용 — shellcheck SC2034 회피용 export
+export HAS_MATRIX=true
+export MATRIX_FILE=".flowset/spec/matrix.json"
 # shellcheck source=/dev/null
 source "$EXTRACT"
 
 # L-1. tests/*.ts는 src/ 영역이 아니므로 코드 변경으로 분류 안 됨 (false positive 거부)
-CHANGED="tests/integration.test.ts"
+export CHANGED="tests/integration.test.ts"
 output=$(verify_matrix_against_diff 2>&1 || true)
 if [[ -z "$output" ]]; then
   pass "L. 정규식 [LOW 해소]: tests/*.ts → src 영역 아님 → MATRIX_ISSUE 0건"
