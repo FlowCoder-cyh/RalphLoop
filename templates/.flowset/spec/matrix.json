@@ -1,0 +1,98 @@
+{
+  "_comment_top": "FlowSet v4.0 매트릭스 SSOT 템플릿 — /wi:prd가 이 파일을 PROJECT_CLASS에 따라 채워서 .flowset/spec/matrix.json으로 저장합니다.",
+  "_comment_class": "class 필드: code | content | hybrid 중 하나. /wi:prd Step 4 진입점이 PROJECT_CLASS를 그대로 대입.",
+  "_comment_consumers": "WI-C2(sprint-template), WI-C3-code(stop-rag-check auth/type/Gherkin), WI-C3-content(stop-rag-check sources/completeness), WI-C4(evaluator coverage), WI-C5(verify-requirements), WI-C6(session-start-vault 미완 셀 주입)이 본 스키마를 소비.",
+  "_comment_v3_defense": "schema_version은 prd-state.json과 동일하게 v2~v9 허용 (=~ ^v[2-9]$). v10+ 도입 시 별도 migration 함수 분기.",
+
+  "schema_version": "v2",
+  "class": "code",
+
+  "_schema_code": {
+    "_required_fields": ["schema_version", "class", "entities"],
+    "_optional_fields": ["auth_framework", "auth_patterns"],
+    "auth_framework": "next-auth | clerk | supabase | lucia | passport | python-flask-login | python-django | (커스텀 시 빈 문자열)",
+    "auth_patterns": [
+      "auth_framework가 비어있으면 사용자 수동 입력 (정규식 패턴 배열)",
+      "Stop hook(WI-C3-code)이 src/api/** 변경 시 본 배열을 | join하여 grep — 하나도 매칭 안 되면 block"
+    ],
+    "entities_example": {
+      "Leave": {
+        "crud": {
+          "C": {"_required": "셀 존재 의무"},
+          "R": {"_required": "셀 존재 의무"},
+          "U": {"_required": "셀 존재 의무"},
+          "D": {"_required": "셀 존재 의무"}
+        },
+        "permissions": {
+          "_comment": "role × C/R/U/D 권한 — false=권한없음, true=전체, \"own\"|\"team\"|\"all\"=범위 한정",
+          "employee":  {"C": true, "R": "own",  "U": "own",  "D": false},
+          "manager":   {"C": true, "R": "team", "U": "team", "D": false},
+          "admin":     {"C": true, "R": "all",  "U": "all",  "D": true}
+        },
+        "type_ssot": "prisma/schema.prisma#Leave",
+        "endpoints": {
+          "C": "POST /api/leaves",
+          "R": "GET /api/leaves",
+          "U": "PATCH /api/leaves/:id",
+          "D": "DELETE /api/leaves/:id"
+        },
+        "gherkin": [
+          "spec/gherkin/leave-create.feature",
+          "spec/gherkin/leave-update-own.feature"
+        ],
+        "tests": [
+          "tests/leave/create.test.ts",
+          "tests/leave/update.test.ts"
+        ],
+        "status": {
+          "_comment": "missing | pending | done — 미완 셀 1개라도 있으면 evaluator FAIL",
+          "C": "done",
+          "R": "done",
+          "U": "missing",
+          "D": "missing"
+        }
+      }
+    }
+  },
+
+  "_schema_content": {
+    "_required_fields": ["schema_version", "class", "sections"],
+    "_class_value": "content",
+    "sections_example": {
+      "3.2-User-Flow": {
+        "roles": {
+          "_comment": "writer→draft, reviewer→review, approver→approve 매핑이 표준",
+          "writer":   {"draft": true,  "review": false, "approve": false},
+          "reviewer": {"draft": false, "review": true,  "approve": false},
+          "approver": {"draft": false, "review": false, "approve": true}
+        },
+        "sources": [
+          "research/user-interviews/2026-03-01.md",
+          "https://example.com/research-source"
+        ],
+        "completeness_checklist": ["목표", "흐름", "예외케이스"],
+        "status": {
+          "_comment": "missing | pending | done — 1차 판정은 .flowset/reviews/{section}-{reviewer}.md 파일 존재(설계 §4 :143)",
+          "draft": "done",
+          "review": "pending",
+          "approve": "missing"
+        }
+      }
+    },
+    "_rubric_reference": {
+      "_comment": "review-rubric.md 5축 가중치(25/25/20/15/15)는 본 매트릭스에 직렬화하지 않고 review-rubric.md만 SSOT — WI-C4 evaluator가 두 파일을 동시 로드. SSOT 단일성 원칙."
+    }
+  },
+
+  "_schema_hybrid": {
+    "_required_fields": ["schema_version", "class", "entities", "sections"],
+    "_class_value": "hybrid",
+    "_comment": "code 영역(entities)과 content 영역(sections)을 단일 파일에 동시 보유. Stop hook은 ownership.json.teams[].class로 변경 파일 경로를 분류한 뒤 entities 또는 sections 검증으로 라우팅 (설계 §4 :158-181, :172-181)."
+  },
+
+  "_init_template_note": "이 파일은 install.sh가 .flowset/spec/matrix.json으로 직접 cp하지 않습니다 — /wi:prd Step 4가 PROJECT_CLASS에 맞춰 동적 생성합니다. 이 파일은 schema 참조용 SSOT입니다.",
+
+  "entities": {},
+  "auth_framework": "",
+  "auth_patterns": []
+}

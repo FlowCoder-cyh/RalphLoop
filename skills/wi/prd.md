@@ -50,10 +50,13 @@ migrate_prd_state_v1_to_v2() {
   [[ ! -f "$state_file" ]] && return 0  # 파일 없으면 skip (신규 프로젝트)
   [[ ! -s "$state_file" ]] && return 0  # 빈 파일(0바이트) skip — /wi:prd 비정상 종료 후 잔존 파일 방어
 
-  # idempotent: 이미 v2면 즉시 return
+  # idempotent: 이미 v2 이상이면 즉시 return (v3 다운그레이드 방어)
+  # WI-001 1차 평가 이월 항목 (WI-C1 동반 수정, 설계 §8 :377):
+  # `== "v2"` 비교는 미래 v3 도입 시 v3 → v2 다운그레이드 발생.
+  # `=~ ^v[2-9]$`로 v2~v9 전수 skip — v10+는 별도 migration 함수로 분기 예정.
   local schema_version
   schema_version=$(jq -r '.schema_version // "v1"' "$state_file" 2>/dev/null || echo "v1")
-  [[ "$schema_version" == "v2" ]] && return 0
+  [[ "$schema_version" =~ ^v[2-9]$ ]] && return 0
 
   # 원본 백업 (실패 시 복원용 스냅샷)
   cp "$state_file" "${state_file}.v1.bak" || return 1
@@ -203,6 +206,126 @@ L2 모듈:
 추가하거나 빼야 할 게 있나요?
 ```
 
+### Step 2.5: Role 추출 + auth_patterns 자동 매핑 (WI-C1, v4.0 신설)
+
+**목적**: PRD 본문에서 역할(role)을 자동 추출하고, 기존 코드베이스의 auth 스택을 감지해 `auth_patterns[]`를 매핑합니다. Step 4(매트릭스 셀 의무)와 Stop hook의 auth middleware 검사(WI-C3-code 예약)에서 SSOT로 소비됩니다.
+
+**적용 대상**: `PROJECT_CLASS=code` 또는 `PROJECT_CLASS=hybrid`. content는 Section×Role×Action 매트릭스를 사용하므로 Step 2.5에서도 role 추출은 동일하게 실행되며, auth_patterns 매핑은 skip됩니다.
+
+**Step 2.5.a: PRD 본문 기반 Role 추출**
+
+L1~L3 도메인 설명에서 다음 키워드를 grep하여 role 후보를 추출:
+
+```
+역할 키워드 (한글):  관리자 | 매니저 | 팀장 | 직원 | 사용자 | 작성자 | 리뷰어 | 승인자
+역할 키워드 (영문):  admin | manager | lead | employee | user | writer | reviewer | approver
+권한 키워드:        권한 | 접근 | 승인 | 거부 | 401 | 403 | role | permission | RBAC
+```
+
+후보 추출 후 사용자에게 확인:
+
+```
+PRD에서 다음 역할이 감지되었습니다:
+  1. admin (관리자)
+  2. manager (매니저/팀장)
+  3. employee (직원)
+
+이대로 확정할까요?
+- 추가 역할이 있으면: "역할 추가: {이름}"
+- 빠진 역할이 있으면: "역할 제거: {이름}"
+- 매핑 변경이 있으면: "이름 변경: {old} → {new}"
+```
+
+확정된 role 목록을 `prd-state.json.roles[]`에 저장:
+
+```json
+{
+  "roles": ["admin", "manager", "employee"]
+}
+```
+
+**Step 2.5.b: auth_framework 감지 (PROJECT_CLASS=code | hybrid only)**
+
+기존 코드베이스가 있는 경우 (`/wi:init` 후 재실행 시), 다음 파일을 grep하여 auth 스택 자동 감지:
+
+| 감지 파일 | 패턴 | auth_framework |
+|---------|------|---------------|
+| `package.json` | `"next-auth"` | `next-auth` |
+| `package.json` | `"@clerk/"` | `clerk` |
+| `package.json` | `"@supabase/auth-helpers"` | `supabase` |
+| `package.json` | `"lucia-auth"` \| `"lucia"` | `lucia` |
+| `package.json` | `"passport"` | `passport` |
+| `requirements.txt` / `pyproject.toml` | `flask-login` \| `django.contrib.auth` | `python-{name}` |
+
+매핑 후 `auth_patterns[]`에 정규식 패턴 자동 채움 (설계 §4 :98-107):
+
+```bash
+detect_auth_framework() {
+  local fw="" patterns=()
+  if [[ -f "package.json" ]]; then
+    if jq -e '.dependencies."next-auth" // .devDependencies."next-auth"' package.json >/dev/null 2>&1; then
+      fw="next-auth"
+      patterns=('getServerSession\(' 'auth\(\)')
+    elif jq -e '.dependencies | to_entries[] | select(.key | startswith("@clerk/"))' package.json >/dev/null 2>&1; then
+      fw="clerk"
+      patterns=('currentUser\(' 'auth\(\)')
+    elif jq -e '.dependencies | to_entries[] | select(.key | startswith("@supabase/auth-helpers"))' package.json >/dev/null 2>&1; then
+      fw="supabase"
+      patterns=('getUser\(' 'createServerClient\(')
+    elif jq -e '.dependencies."lucia-auth" // .dependencies."lucia"' package.json >/dev/null 2>&1; then
+      fw="lucia"
+      patterns=('validateRequest\(')
+    elif jq -e '.dependencies."passport"' package.json >/dev/null 2>&1; then
+      fw="passport"
+      patterns=('req\.isAuthenticated\(')
+    fi
+  fi
+  printf '%s\n' "$fw"
+  printf '%s\n' "${patterns[@]}"
+}
+```
+
+**Step 2.5.c: 커스텀 auth 수동 추가**
+
+자체 구현 auth (위 5개 프레임워크에 매칭 안 됨)인 경우:
+
+```
+package.json에서 auth 스택을 감지하지 못했습니다.
+커스텀 auth 함수가 있으면 패턴(정규식)을 입력해주세요.
+예: "requireRole\(", "checkAuth\(", "getCurrentUser\("
+
+여러 개는 쉼표로 구분: "requireRole\(, checkAuth\("
+
+없으면 엔터 (auth_patterns 비워두기 — Stop hook 검사 skip).
+```
+
+**Step 2.5.d: prd-state.json 저장**
+
+확정된 값을 prd-state.json에 병합 (jq atomic write):
+
+```bash
+# .flowset/prd-state.json에 roles + auth_framework + auth_patterns 저장
+# WI-001 migrate 함수가 이미 v2 필드를 보장하므로 단순 .roles = ... 로 덮어쓰기
+jq --argjson roles "$roles_json" \
+   --arg fw "$auth_framework" \
+   --argjson patterns "$auth_patterns_json" \
+   '.roles = $roles | .auth_framework = $fw | .auth_patterns = $patterns' \
+   .flowset/prd-state.json > .flowset/prd-state.json.tmp \
+   && mv .flowset/prd-state.json.tmp .flowset/prd-state.json
+```
+
+**Step 2.5.e: content class 분기 (PROJECT_CLASS=content)**
+
+content 단일 class에서는 auth_framework / auth_patterns 매핑을 skip하고 role만 추출. content 매트릭스는 `writer/reviewer/approver/designer` 같은 워크플로우 role을 사용 (설계 §4 :126-138).
+
+```bash
+if [[ "${PROJECT_CLASS:-code}" == "content" ]]; then
+  # content는 auth 검사 대상 아님 — Stop hook도 auth_patterns 검사 skip
+  auth_framework=""
+  auth_patterns_json="[]"
+fi
+```
+
 ### Step 3: 기술 스택 확정
 
 사용자의 선호가 없으면 프로젝트 특성에 맞게 제안:
@@ -291,6 +414,164 @@ L3까지 확정되면 각 기능별 구체적 태스크를 자동 생성.
 - 수용 기준: 검증 가능한 1줄
   - 예: "수용 기준: POST 호출 시 DB에 레코드 생성 + 에러 시 400 반환"
 - `/wi:start`에서 .flowset/contracts/data-flow.md가 있으면 SSOT 엔드포인트 자동 참조
+
+#### Step 4 확장: 매트릭스 셀 의무화 (WI-C1, v4.0 신설)
+
+L4 태스크 생성과 동시에 **`.flowset/spec/matrix.json`**을 생성하고 모든 셀을 `status: "missing"`으로 초기화합니다. 셀이 하나라도 매트릭스에 누락되면 후속 검증(WI-C5 verify-requirements + Stop hook + WI-C4 evaluator coverage)이 FAIL을 강제합니다 — pain point B1/B2/B5 직접 차단(설계 §4 :109-117).
+
+**적용 대상**: 모든 PROJECT_CLASS. 단 스키마는 class별로 다름 (template SSOT는 `templates/.flowset/spec/matrix.json`).
+
+**Step 4.M.a: code 매트릭스 생성 (`PROJECT_CLASS=code | hybrid`)**
+
+각 Entity × CRUD × Role 조합에 대해 셀을 생성:
+
+```bash
+generate_code_matrix() {
+  # 입력: prd-state.json의 entities[], roles[], crud_matrix{}, permission_matrix{}, auth_patterns[], auth_framework
+  # 출력: .flowset/spec/matrix.json (class=code 스키마)
+  local roles_json entities_json auth_patterns_json auth_framework
+  roles_json=$(jq '.roles' .flowset/prd-state.json)
+  entities_json=$(jq '.entities' .flowset/prd-state.json)
+  auth_patterns_json=$(jq '.auth_patterns' .flowset/prd-state.json)
+  auth_framework=$(jq -r '.auth_framework' .flowset/prd-state.json)
+
+  # 각 entity에 대해 CRUD 4셀 + role별 permission 셀 + status="missing" 초기화
+  jq -n \
+    --argjson roles "$roles_json" \
+    --argjson entities "$entities_json" \
+    --argjson auth_patterns "$auth_patterns_json" \
+    --arg auth_framework "$auth_framework" '
+    {
+      schema_version: "v2",
+      class: "code",
+      auth_framework: $auth_framework,
+      auth_patterns: $auth_patterns,
+      entities: ($entities | map({
+        (.name): {
+          crud: {C: {}, R: {}, U: {}, D: {}},
+          permissions: ($roles | map({(.): {C: false, R: false, U: false, D: false}}) | add),
+          type_ssot: ((.type_ssot // "")),
+          endpoints: {C: "", R: "", U: "", D: ""},
+          gherkin: [],
+          tests: [],
+          status: {C: "missing", R: "missing", U: "missing", D: "missing"}
+        }
+      }) | add)
+    }' > .flowset/spec/matrix.json.tmp \
+    && mv .flowset/spec/matrix.json.tmp .flowset/spec/matrix.json
+}
+```
+
+**code 매트릭스 셀 의무 규칙** (설계 §4 :68-95):
+- **CRUD 4셀** 모두 존재해야 함 (C/R/U/D 누락 금지) — pain point B1
+- **role × CRUD 권한 셀** 모두 존재해야 함 (`employee/manager/admin × C/R/U/D` = N×4 셀) — pain point B2
+- **type_ssot** 필드 1개 (예: `prisma/schema.prisma#Leave`) — 타입 중복 SSOT — pain point B3
+- **endpoints** 4셀 (HTTP 메서드 + 경로) — Stop hook이 변경 파일 path 매칭에 사용
+- **gherkin[] / tests[]** 배열 (초기 빈 배열, WI-C2에서 채움) — pain point B4
+- **status[C/R/U/D]**: `missing` | `pending` | `done` 3-state
+
+**Step 4.M.b: content 매트릭스 생성 (`PROJECT_CLASS=content | hybrid`)**
+
+각 Section × Role × Action 조합에 대해 셀 생성:
+
+```bash
+generate_content_matrix() {
+  # 입력: prd-state.json의 sections[], roles[], completeness_checklist[]
+  # 출력: .flowset/spec/matrix.json (class=content 스키마)
+  local roles_json sections_json
+  roles_json=$(jq '.roles' .flowset/prd-state.json)
+  sections_json=$(jq '.sections // []' .flowset/prd-state.json)
+
+  jq -n \
+    --argjson roles "$roles_json" \
+    --argjson sections "$sections_json" '
+    {
+      schema_version: "v2",
+      class: "content",
+      sections: ($sections | map({
+        (.name): {
+          roles: ($roles | map({(.): {draft: false, review: false, approve: false}}) | add),
+          sources: (.sources // []),
+          completeness_checklist: (.completeness_checklist // []),
+          status: {draft: "missing", review: "missing", approve: "missing"}
+        }
+      }) | add)
+    }' > .flowset/spec/matrix.json.tmp \
+    && mv .flowset/spec/matrix.json.tmp .flowset/spec/matrix.json
+}
+```
+
+**content 매트릭스 셀 의무 규칙** (설계 §4 :119-138 + §3 :143-146):
+- **Section × draft/review/approve 3셀** 모두 존재 — pain point B1 변형 (섹션 단계 누락 금지)
+- **role 권한 매핑** (writer→draft, reviewer→review, approver→approve)
+- **sources[]** 배열 (출처 URL 1개 이상 — WI-B3 style-guide.md `섹션당 출처 URL 최소 1개` 규칙 SSOT 참조)
+- **completeness_checklist[]** 배열 (목표/흐름/예외케이스 등 — 모든 항목 done이어야 PASS)
+- **status[draft/review/approve]**: `missing` | `pending` | `done` 3-state
+- **rubric scoring_weights**: WI-B3 review-rubric.md 5축 가중치(25/25/20/15/15)는 본 매트릭스에 직접 직렬화하지 않고 SSOT 단일성 원칙에 따라 review-rubric.md만 참조 (WI-C4 evaluator가 두 파일을 동시 로드)
+
+**Step 4.M.c: hybrid 매트릭스 생성 (`PROJECT_CLASS=hybrid`)**
+
+hybrid는 단일 `matrix.json` 파일에 두 스키마를 분리하여 저장 — `entities[]`(code 영역) + `sections[]`(content 영역) 동시 보유:
+
+```json
+{
+  "schema_version": "v2",
+  "class": "hybrid",
+  "auth_framework": "next-auth",
+  "auth_patterns": ["getServerSession\\(", "auth\\(\\)"],
+  "entities": { "Leave": { ... } },
+  "sections": { "3.2-User-Flow": { ... } }
+}
+```
+
+Stop hook은 변경 파일 경로를 `ownership.json.teams[].class`로 분류해 `entities` 또는 `sections` 검증 분기에 라우팅 (설계 §4 :158-181).
+
+**Step 4.M.d: matrix.json 생성 진입점**
+
+`/wi:prd` Step 4 마지막에 PROJECT_CLASS에 따라 분기:
+
+```bash
+mkdir -p .flowset/spec
+case "${PROJECT_CLASS:-code}" in
+  code)    generate_code_matrix ;;
+  content) generate_content_matrix ;;
+  hybrid)  generate_code_matrix; generate_hybrid_merge_content ;;
+  *)       echo "ERROR: 알 수 없는 PROJECT_CLASS: ${PROJECT_CLASS}" >&2; exit 1 ;;
+esac
+```
+
+**셀 의무 검증 (생성 직후 self-check)**:
+
+```bash
+verify_matrix_cells() {
+  local matrix=".flowset/spec/matrix.json"
+  local class
+  class=$(jq -r '.class' "$matrix")
+
+  case "$class" in
+    code|hybrid)
+      # 모든 entity가 CRUD 4셀 + status 4셀 보유 확인
+      local missing
+      missing=$(jq -r '.entities | to_entries[] |
+        select((.value.crud | keys | sort) != ["C","D","R","U"] or
+               (.value.status | keys | sort) != ["C","D","R","U"]) |
+        .key' "$matrix")
+      [[ -n "$missing" ]] && { echo "ERROR: CRUD 셀 누락 entity: $missing" >&2; return 1; }
+      ;;
+    content)
+      # 모든 section이 draft/review/approve 3셀 보유 확인
+      local missing
+      missing=$(jq -r '.sections | to_entries[] |
+        select((.value.status | keys | sort) != ["approve","draft","review"]) |
+        .key' "$matrix")
+      [[ -n "$missing" ]] && { echo "ERROR: Section status 셀 누락: $missing" >&2; return 1; }
+      ;;
+  esac
+  return 0
+}
+```
+
+생성 직후 `verify_matrix_cells` 호출이 실패하면 `/wi:prd`가 즉시 종료(`exit 1`)하여 미완성 매트릭스가 다음 단계(WI 생성)로 흘러가는 것을 차단합니다.
 
 ### Step 5: PRD 초안 생성 & 피드백
 
