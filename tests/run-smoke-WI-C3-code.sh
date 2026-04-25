@@ -503,6 +503,23 @@ else
   fail "decision:block 출력 누락"
 fi
 
+# 평가자 [MEDIUM] 해소 회귀 차단: decision JSON이 valid (jq -e 파싱 통과)
+# B2 차단 메시지에 raw \( 포함되어도 jq -n으로 escape 일임 → invalid JSON 회귀 방지
+test_reason='auth middleware 누락 (B2): src/api/x.ts — auth_patterns 정규식: getServerSession\(|auth\(\)'
+test_json=$(jq -nc --arg reason "$test_reason" '{"decision":"block", reason: $reason}')
+if echo "$test_json" | jq -e '.decision == "block"' > /dev/null 2>&1; then
+  pass "[학습 25/MEDIUM 해소] decision JSON valid (backslash escape jq -n 일임 — invalid JSON 회귀 차단)"
+else
+  fail "[MEDIUM] decision JSON invalid (backslash escape 회귀)"
+fi
+
+# 학습 31 완전 적용 회귀 차단: STOP_HOOK_ACTIVE도 tr -d '\r' 적용 (Windows hook 무한루프 방어)
+if grep -qE 'STOP_HOOK_ACTIVE.*jq -r .*\| tr -d ' "$STOP_SH"; then
+  pass "[학습 31 완전] STOP_HOOK_ACTIVE jq -r 결과에 tr -d '\r' 적용 (Windows 무한루프 방어)"
+else
+  fail "[학습 31] STOP_HOOK_ACTIVE tr -d '\r' 미적용"
+fi
+
 # ============================================================================
 echo ""
 echo "=== 총 결과 ==="

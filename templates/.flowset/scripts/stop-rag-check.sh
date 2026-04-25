@@ -10,7 +10,7 @@ export LC_ALL=en_US.UTF-8
 
 # stdin에서 hook 입력 읽기 (stop_hook_active 확인)
 INPUT=$(cat 2>/dev/null || true)
-STOP_HOOK_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null || echo "false")
+STOP_HOOK_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null | tr -d '\r' || echo "false")
 
 # 이미 Stop hook에서 재실행 중이면 무한 루프 방지
 if [[ "$STOP_HOOK_ACTIVE" == "true" ]]; then
@@ -294,12 +294,14 @@ fi
 
 # 결과 출력
 if [[ ${#issues[@]} -gt 0 ]]; then
-  reason=""
-  for issue in "${issues[@]}"; do
-    reason+="- $issue\n"
-  done
   # decision: "block" → Claude가 문제를 수정하도록 계속 작업
-  printf '{"decision":"block","reason":"%s"}' "$(echo -e "$reason" | sed 's/"/\\"/g' | tr '\n' ' ')"
+  # 평가자 [MEDIUM] 해소: jq -n으로 JSON escape 일임 (B2 차단 메시지에 포함된 \( 등 backslash 안전 처리)
+  # WI-C3-parse line 166-170 동일 패턴 차용 → SSOT 단일성 (WI-C3-content가 동일 패턴 차용 가능)
+  reason_text=""
+  for issue in "${issues[@]}"; do
+    reason_text+="- $issue"$'\n'
+  done
+  jq -nc --arg reason "$reason_text" '{"decision":"block", reason: $reason}'
   exit 0
 fi
 
