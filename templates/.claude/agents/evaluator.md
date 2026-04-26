@@ -59,10 +59,22 @@ hooks:
 
 ### type: hybrid (PROJECT_CLASS=hybrid) — v4.0 신설
 - 변경 파일을 `ownership.json.teams[].class`로 code/content 영역 분리
-- 각 영역에 해당 채점표 적용 → 변경량(line count) 가중 평균
-- 합산 공식: `hybrid_score = (code_lines × code_score + content_lines × content_score) / total_lines`
-- 변경량 0인 영역은 합산 제외. 양쪽 모두 0이면 N/A — 평가 자체 skip
-- **strict mode** (스프린트 계약에 명시 시): `hybrid_score = min(code_score, content_score)`
+- 각 영역에 해당 채점표 적용 → 변경량(line count, `git diff --shortstat`) 가중 평균
+- **weighted 모드 (기본)**:
+  - `hybrid_score = (code_lines × code_score + content_lines × content_score) / total_lines`
+  - 변경량 0인 영역은 합산 제외 (해당 항만 drop, 분모도 줄임)
+  - 양쪽 모두 0이면 N/A — 평가 자체 skip
+- **strict 모드** (스프린트 계약 frontmatter에 `coverage_mode: strict` 명시 시):
+  - 양쪽 영역 모두 변경 있어야 발동 — 한쪽 0이면 strict 비활성화 → weighted로 폴백
+  - `hybrid_score = min(code_score, content_score)` — 약한 영역이 전체 점수 결정
+  - 한쪽만 변경된 hybrid PR에 strict가 잘못 적용되어 N/A score와 min 계산하는 모호성 차단
+- **strict 발동 키워드 형식** (sprint-{NNN}.md frontmatter):
+  ```yaml
+  ---
+  type: hybrid
+  coverage_mode: strict   # 생략 시 weighted (기본)
+  ---
+  ```
 
 ### type: 비주얼 (legacy, 변경 없음)
 | 기준 | 가중치 | 설명 |
@@ -78,17 +90,17 @@ hooks:
 
 `matrix.json`의 status 셀 중 `done`인 비율. 100%면 만점, 미만이면 비례 감점.
 
-**code class** — entities × {C,R,U,D status} 셀:
+**code class** — entities × {C,R,U,D status} 셀 (학습 31: tr -d '\r' SSOT 일관 적용):
 ```bash
-total=$(jq '[.entities[] | .status | to_entries[]] | length' .flowset/spec/matrix.json)
-done_n=$(jq '[.entities[] | .status | to_entries[] | select(.value == "done")] | length' .flowset/spec/matrix.json)
+total=$(jq '[.entities[] | .status | to_entries[]] | length' .flowset/spec/matrix.json | tr -d '\r')
+done_n=$(jq '[.entities[] | .status | to_entries[] | select(.value == "done")] | length' .flowset/spec/matrix.json | tr -d '\r')
 cell_coverage=$(awk "BEGIN { print ($total > 0 ? $done_n / $total : 0) }")
 ```
 
 **content class** — sections × {draft,review,approve status} 셀:
 ```bash
-total=$(jq '[.sections[] | .status | to_entries[]] | length' .flowset/spec/matrix.json)
-done_n=$(jq '[.sections[] | .status | to_entries[] | select(.value == "done")] | length' .flowset/spec/matrix.json)
+total=$(jq '[.sections[] | .status | to_entries[]] | length' .flowset/spec/matrix.json | tr -d '\r')
+done_n=$(jq '[.sections[] | .status | to_entries[] | select(.value == "done")] | length' .flowset/spec/matrix.json | tr -d '\r')
 cell_coverage=$(awk "BEGIN { print ($total > 0 ? $done_n / $total : 0) }")
 ```
 
@@ -103,20 +115,50 @@ cell_coverage=$(awk "BEGIN { print ($total > 0 ? $done_n / $total : 0) }")
 matrix.entities[].gherkin[]의 모든 .feature 파일 scenario 수 vs tests 매핑 비율.
 1순위 cucumber CLI(npm 환경), 2순위 `.flowset/scripts/parse-gherkin.sh` fallback (WI-C3p).
 
+**완결 의사코드** (matched_scenarios 누적까지 명시 — LLM이 그대로 실행 가능):
+
 ```bash
 total_scenarios=0
 matched_scenarios=0
 while IFS= read -r entity_key; do
   [[ -z "$entity_key" ]] && continue
+  # 본 entity의 매핑 테스트 파일들 → 정규화된 test/it 이름 union
+  test_names=""
+  while IFS= read -r tf; do
+    [[ -z "$tf" || ! -f "$tf" ]] && continue
+    tf_names=$(grep -oE '(test|it)\([\"'"'"'][^\"'"'"']+' "$tf" 2>/dev/null \
+      | sed -E 's/^(test|it)\([\"'"'"']//' \
+      | tr '[:upper:]' '[:lower:]' \
+      | tr -s '[:space:]' ' ' \
+      | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+    test_names+="$tf_names"$'\n'
+  done < <(jq -r --arg k "$entity_key" '.entities[$k].tests[]?' .flowset/spec/matrix.json | tr -d '\r')
+
+  # 각 .feature 파일별: total_count 누적 + scenario.name이 test_names에 등장하면 matched++
   while IFS= read -r feature; do
     [[ ! -f "$feature" ]] && continue
-    feature_total=$(bash .flowset/scripts/parse-gherkin.sh "$feature" | jq -r '.total_count // 0' | tr -d '\r')
+    parser_output=$(bash .flowset/scripts/parse-gherkin.sh "$feature" 2>/dev/null | tr -d '\r' || echo '{}')
+    feature_total=$(echo "$parser_output" | jq -r '.total_count // 0' | tr -d '\r')
     total_scenarios=$((total_scenarios + feature_total))
-    # 이름 부분 매칭은 stop-rag-check.sh 섹션 8 동일 로직
+    while IFS= read -r gname; do
+      [[ -z "$gname" ]] && continue
+      # 정규화 후 fixed-string contains (stop-rag-check.sh 섹션 8 동일)
+      gname_norm=$(echo "$gname" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ' \
+        | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      if printf '%s' "$test_names" | grep -qF -- "$gname_norm"; then
+        matched_scenarios=$((matched_scenarios + 1))
+      fi
+    done < <(echo "$parser_output" | jq -r '.scenarios[].name // empty' | tr -d '\r')
   done < <(jq -r --arg k "$entity_key" '.entities[$k].gherkin[]?' .flowset/spec/matrix.json | tr -d '\r')
 done < <(jq -r '.entities | keys[]' .flowset/spec/matrix.json | tr -d '\r')
+
 scenario_coverage=$(awk "BEGIN { print ($total_scenarios > 0 ? $matched_scenarios / $total_scenarios : 0) }")
 ```
+
+**핵심 규칙**:
+- test/it 이름 추출 + 정규화는 `stop-rag-check.sh:206-211` (WI-C3-code 섹션 8) 동일
+- gherkin scenario.name도 동일 정규화 후 fixed-string contains 매칭
+- 이 의사코드를 그대로 따르면 평가자별 결과 일관 (LLM 시각 파싱 의존 0)
 
 **채점 환산**: cell_coverage와 동일.
 

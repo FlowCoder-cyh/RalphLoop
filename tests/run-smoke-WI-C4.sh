@@ -118,10 +118,31 @@ else
   fail "hybrid 합산 공식 누락"
 fi
 
-if grep -qE 'strict mode.*min\(code_score, content_score\)' "$EVAL_MD"; then
+if grep -qE 'min\(code_score, content_score\)' "$EVAL_MD"; then
   pass "hybrid strict mode (min) 명시"
 else
   fail "hybrid strict mode 누락"
+fi
+
+# 평가자 [LOW 해소]: hybrid strict 발동 키워드 + 변경량 0 영역 상호작용 명시
+hybrid_block=$(awk '/^### type: hybrid/,/^### type: 비주얼/' "$EVAL_MD")
+if echo "$hybrid_block" | grep -qE 'coverage_mode: strict'; then
+  pass "[LOW 해소] hybrid strict 발동 키워드 (coverage_mode: strict) sprint contract frontmatter 형식 명시"
+else
+  fail "[LOW] strict 발동 키워드 미정의"
+fi
+
+if echo "$hybrid_block" | grep -qE '한쪽 0이면 strict 비활성화 → weighted로 폴백'; then
+  pass "[LOW 해소] strict + 변경량 0 영역 상호작용 — 한쪽 0 시 strict 폴백 명시"
+else
+  fail "[LOW] strict + 변경량 0 상호작용 모호"
+fi
+
+if echo "$hybrid_block" | grep -qE 'weighted 모드 \(기본\)' && \
+   echo "$hybrid_block" | grep -qE 'strict 모드'; then
+  pass "[LOW 해소] hybrid weighted/strict 두 모드 명시적 분기"
+else
+  fail "[LOW] hybrid 모드 분기 모호"
 fi
 
 # ============================================================================
@@ -156,11 +177,30 @@ else
   fail "parse-gherkin.sh 호출 누락"
 fi
 
-# 학습 31 적용 — coverage 산출 의사코드에서도 tr -d '\r'
-if grep -qE 'tr -d ' "$EVAL_MD"; then
-  pass "[학습 31] coverage 산출에서 tr -d '\\r' 적용 (Windows jq.exe CRLF 정합)"
+# 학습 31 적용 — cell_coverage 의사코드 4건 + scenario_coverage 의사코드 모두 tr -d '\r'
+# 평가자 [MEDIUM] 해소: cell_coverage code/content jq 4건 (total + done_n) 모두 적용 의무
+cell_cov_block=$(awk '/^### cell_coverage/,/^### scenario_coverage/' "$EVAL_MD")
+cell_cov_tr_count=$(echo "$cell_cov_block" | grep -E 'jq .*matrix\.json \| tr -d' | wc -l | tr -d ' ')
+if (( cell_cov_tr_count >= 4 )); then
+  pass "[학습 31][MEDIUM 해소] cell_coverage jq 4건(code total/done + content total/done) 모두 tr -d '\\r' (${cell_cov_tr_count}건)"
 else
-  fail "[학습 31] tr -d '\\r' 누락"
+  fail "[학습 31] cell_coverage jq tr -d '\\r' 부족 (${cell_cov_tr_count}건, 4+ 기대)"
+fi
+
+# scenario_coverage matched_scenarios 누적 로직 명시 (CRITICAL 해소)
+sce_cov_block=$(awk '/^### scenario_coverage/,/^### 평가 절차에 통합/' "$EVAL_MD")
+if echo "$sce_cov_block" | grep -qE 'matched_scenarios=\$\(\(matched_scenarios \+ 1\)\)'; then
+  pass "[CRITICAL 해소] scenario_coverage matched_scenarios 누적 로직 명시 (의사코드 자기 완결성)"
+else
+  fail "[CRITICAL] matched_scenarios 누적 로직 누락 — LLM 따라가도 0/N=0 항상 발생"
+fi
+
+# scenario_coverage 정규화 + grep -qF 매칭 명시 (stop-rag-check.sh:206-211 동일)
+if echo "$sce_cov_block" | grep -qE "tr '\[:upper:\]' '\[:lower:\]'" && \
+   echo "$sce_cov_block" | grep -qE 'grep -qF -- "\$gname'; then
+  pass "[CRITICAL 해소] scenario_coverage 정규화 + grep -qF 매칭 (stop-rag-check.sh 섹션 8 동일 로직 명시)"
+else
+  fail "scenario_coverage 정규화/매칭 의사코드 누락"
 fi
 
 # 채점 환산 표 (1.00 → 10점, 0.80 → 7점, 0.50 → 4점, 0.00 → 0점)
