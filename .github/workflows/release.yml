@@ -23,6 +23,11 @@ on:
 permissions:
   contents: write
 
+# 동시 release 발행 race 방지 — 같은 ref에서 release job 1개만 실행
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Auto-publish release from CHANGELOG
@@ -76,12 +81,26 @@ jobs:
           set -euo pipefail
           VERSION="${{ steps.extract.outputs.version }}"
 
-          # 첫 ## [vX.Y.Z] 헤더 ~ 다음 ## [v 직전까지 추출
-          awk -v v="$VERSION" '
-            $0 ~ "^## \\[" v "\\]" { flag=1; next }
-            /^## \[v/ && flag { exit }
-            flag { print }
-          ' CHANGELOG.md > /tmp/release-notes.md
+          # awk dynamic regex(`"\\["`) 의 char-class 오해석을 회피하기 위해 line-number 기반 추출.
+          # grep -F (literal) + sed 로 escape 의존성 제거 (학습 36, WI-E1 fix).
+          HEADER="## [$VERSION]"
+          START=$(grep -nF -m1 "$HEADER" CHANGELOG.md | cut -d: -f1 || true)
+          if [[ -z "$START" ]]; then
+            echo "ERROR: '$HEADER' 라인을 CHANGELOG.md에서 찾지 못함"
+            exit 1
+          fi
+
+          START_NEXT=$((START + 1))
+          # 다음 ## [v 헤더 라인 (start 이후, 정적 regex만 사용 — dynamic 변수 없음)
+          END=$(awk -v s="$START_NEXT" 'NR >= s && /^## \[v/ {print NR; exit}' CHANGELOG.md || true)
+
+          if [[ -z "$END" ]]; then
+            # 마지막 버전 (다음 헤더 없음) — 끝까지
+            sed -n "${START_NEXT},\$p" CHANGELOG.md > /tmp/release-notes.md
+          else
+            END_PREV=$((END - 1))
+            sed -n "${START_NEXT},${END_PREV}p" CHANGELOG.md > /tmp/release-notes.md
+          fi
 
           # 빈 노트 방어
           if [[ ! -s /tmp/release-notes.md ]]; then
@@ -114,11 +133,14 @@ jobs:
           set -euo pipefail
           VERSION="${{ steps.extract.outputs.version }}"
 
-          # 헤더 라인 추출 (예: "**매트릭스 기반 검증 게이트웨이 + 3-class 시스템**")
-          TITLE_LINE=$(awk -v v="$VERSION" '
-            $0 ~ "^## \\[" v "\\]" { flag=1; next }
-            flag && /^\*\*/ { gsub(/\*\*/, ""); print; exit }
-          ' CHANGELOG.md)
+          # 헤더 직후 첫 **...** 라인 추출 — line-number 기반 (dynamic regex 회피, 학습 36)
+          HEADER="## [$VERSION]"
+          START=$(grep -nF -m1 "$HEADER" CHANGELOG.md | cut -d: -f1 || true)
+          if [[ -n "$START" ]]; then
+            TITLE_LINE=$(tail -n +"$((START + 1))" CHANGELOG.md | grep -m1 -E '^\*\*' | sed 's/\*\*//g' || true)
+          else
+            TITLE_LINE=""
+          fi
 
           if [[ -n "$TITLE_LINE" ]]; then
             TITLE="$VERSION — $TITLE_LINE"

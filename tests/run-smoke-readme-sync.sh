@@ -134,6 +134,36 @@ _check_dir_in_readme "guides" "templates/.flowset/guides" "" ''
 
 # ============================================================================
 echo ""
+echo "=== readme-sync-7b: templates/.github/workflows/ (CI 워크플로우) ==="
+_check_dir_in_readme "workflows" "templates/.github/workflows" "" ''
+
+# ============================================================================
+echo ""
+echo "=== readme-sync-7c: templates/.flowset/hooks/ (Git hooks) ==="
+_check_dir_in_readme "hooks" "templates/.flowset/hooks" "" ''
+
+# ============================================================================
+echo ""
+echo "=== readme-sync-7d: templates/.claude/settings.json hook 6종 ==="
+# WI-v4int 학습 — settings.json hook 등록 누락 차단 (B2~B7 무력화 방지)
+settings_json="templates/.claude/settings.json"
+if [[ -f "$settings_json" ]]; then
+  # settings.json에 정의된 hook 이름 추출
+  for hook_type in SessionStart PostCompact PreToolUse PostToolUse TaskCompleted Stop; do
+    if jq -e ".hooks.${hook_type}" "$settings_json" >/dev/null 2>&1; then
+      if grep -qF "$hook_type" "$README"; then
+        pass "settings.json $hook_type → README 표기"
+      else
+        fail "settings.json $hook_type README 미표기"
+      fi
+    fi
+  done
+else
+  fail "settings.json 부재 ($settings_json)"
+fi
+
+# ============================================================================
+echo ""
 echo "=== readme-sync-8: 매트릭스 SSOT + 신규 디렉토리 ==="
 
 # spec/matrix.json 트리 표기

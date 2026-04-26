@@ -10,12 +10,13 @@
 - 트리거: `main` push에 `CHANGELOG.md` 변경 포함 시
 - 로직: CHANGELOG 최상단 `## [vX.Y.Z]` 헤더 추출 → 해당 tag/release 미존재 시 자동 발행
 - idempotent: tag/release 둘 다 있으면 skip, 부분만 있으면 누락 부분만 생성
-- 섹션 추출: `awk`로 첫 헤더 ~ 다음 `## [v` 직전까지 추출 → release notes
+- 섹션 추출: `grep -F` (literal) + `sed` line-number 기반 (학습 36 — awk dynamic regex의 char-class 오해석 회피)
 - 빈 노트 방어 + 헤더 라인 자동 제목화 (`**...**` 추출 → `vX.Y.Z — ...` 형식)
+- `concurrency` 제어: 같은 ref에서 release job 1개만 실행 (race 방지)
 
-### Layer 2 — README cross-check smoke (`tests/run-smoke-readme-sync.sh`)
+### Layer 2 — README cross-check smoke (`tests/run-smoke-readme-sync.sh`, 63 assertion)
 - 학습 34 (메타-건전성) 적용: hardcode 카운트 없이 실제 디렉토리 ↔ README 표기 동적 비교
-- 검증 영역 (52 assertion):
+- 검증 영역:
   1. `templates/.flowset/scripts/` — 카운트 + 14개 파일명 README 등장
   2. `templates/.flowset/contracts/` — 카운트 + 5개 파일명 등장
   3. `templates/lib/` — 5개 모듈 등장
@@ -23,20 +24,30 @@
   5. `templates/.claude/agents/` — 2개
   6. `templates/.claude/rules/` — 3개
   7. `templates/.flowset/guides/` — 2개
-  8. `spec/matrix.json` + `reviews/` + `approvals/` 트리 표기
-  9. v3.x 잔재 차단 (`flowset.sh # ... (v3.x)` 형식 등장 시 fail)
-  10. README 현재 버전 표기 vs CHANGELOG 최상단 버전 정합
+  8. `templates/.github/workflows/` — 3개 (ci/commit-check/e2e)
+  9. `templates/.flowset/hooks/` — 2개 (commit-msg/pre-push)
+  10. `templates/.claude/settings.json` 6종 hook (SessionStart/PostCompact/PreToolUse/PostToolUse/TaskCompleted/Stop) → README 표기 검증 (WI-v4int 같은 settings.json 결함 재발 차단)
+  11. `spec/matrix.json` + `reviews/` + `approvals/` 트리 표기
+  12. v3.x 잔재 차단 (`flowset.sh # ... (v3.x)` 형식 등장 시 fail)
+  13. README 현재 버전 표기 vs CHANGELOG 최상단 버전 정합
+
+### Layer 1.5 — release.yml dry-run smoke (`tests/run-smoke-release-yml.sh`, 13 assertion)
+- release.yml은 `main` push에만 trigger되어 PR CI에서 동작 검증 안 됨 → 머지 후 첫 동작이 production
+- 이 smoke가 release.yml과 동일 추출 로직을 로컬에서 dry-run하여 사전 차단
+- v4.0.0 / v4.0.1 / v3.x 모든 헤더에 대해 추출 동작 검증 + 존재하지 않는 버전 → 빈 출력 방어 검증
+- release.yml 자체 정합성 검증 (grep -F 기반, concurrency, permissions, trigger paths)
 
 ### CI 통합
-- `flowset-ci.yml` smoke job: 895 → **950 assertion** (readme-sync 52 + WI-D1 99→102 갱신)
-- 새 PR이 v4.0 산출물 추가/변경 시 README에 반영하지 않으면 자동 차단 (WI-D3 같은 누락 사전 차단)
+- `flowset-ci.yml` smoke job: 895 → **974 assertion** (readme-sync 63 + release-yml 13 + WI-D1 99→102 갱신)
+- 새 PR이 v4.0 산출물 추가/변경 시 README/settings.json/workflows/hooks 등에 반영하지 않으면 자동 차단 (WI-D3·WI-v4int 같은 누락 사전 차단)
 
-### 학습 패턴 (35개, +1)
+### 학습 패턴 (36개, +2)
 - **35**: 자동화 3-layer는 CHANGELOG.md를 SSOT로 통일 — release notes / 버전 정합 / README cross-check 모두 CHANGELOG 최상단을 단일 진실로 참조
+- **36**: awk dynamic regex (`"^## \\[" v "\\]"`)는 char-class로 오해석 — 4 backslash 보강도 환경/컨텍스트에 silent fail 가능. `grep -F` (literal) + `sed` line-number 기반으로 escape 의존성 완전 제거가 안전 (evaluator 회의적 검증으로 사전 발굴)
 
 ### 주요 파일 변경
-- 신규: `.github/workflows/release.yml`, `tests/run-smoke-readme-sync.sh`
-- 갱신: `.github/workflows/flowset-ci.yml` (smoke 950 + readme-sync 호출 추가)
+- 신규: `.github/workflows/release.yml`, `tests/run-smoke-readme-sync.sh`, `tests/run-smoke-release-yml.sh`
+- 갱신: `.github/workflows/flowset-ci.yml` (smoke 974 + readme-sync + release-yml 호출 추가)
 
 ## [v4.0.0] - 2026-04-27
 
