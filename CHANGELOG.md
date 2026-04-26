@@ -1,5 +1,104 @@
 # Changelog
 
+## [v4.0.0] - 2026-04-27
+
+**매트릭스 기반 검증 게이트웨이 + 4-class 시스템 (code/content/hybrid/visual)**
+
+22 WI 머지 (Group α/β/γ/δ + WI-001) — 코드 프로젝트뿐 아니라 **content 프로젝트(문서·연구·기획)** 도 동일 워크플로우로 자동화.
+
+### Group α (shell 품질, 8 WI)
+- **WI-A1**: jq 전환 + `set -euo pipefail` 통일 (전체 22 shell)
+- **WI-A2a**: `lib/state.sh` 모듈 분리 (8개 전역변수 이관, flock/mkdir 양쪽 지원)
+- **WI-A2b**: `lib/preflight.sh` 모듈 분리 (`flowset.sh:385-508` 이관)
+- **WI-A2c**: `lib/worker.sh` 모듈 분리 (`execute_claude()` + 관련 함수)
+- **WI-A2d**: `lib/merge.sh` 모듈 분리 (`wait_for_merge` + `wait_for_batch_merge` + `inject_regression_wis`)
+- **WI-A2e**: `lib/vault.sh` 모듈 분리 (vault-helpers.sh 통합)
+- **WI-A3**: bats-core 핵심 테스트 16 @test (state, vault-helpers shim)
+- **WI-A4**: FlowSet 자체 CI (`shellcheck` + `bats` + `bash smoke` + `commit-check`)
+
+### WI-001 (게이트웨이)
+- **WI-001**: `.flowsetrc`에 `PROJECT_CLASS` 필드 신설 (기본값 `code`, 후속 모든 class 분기 잠금 해제)
+
+### Group β (class 분기, 3 WI)
+- **WI-B1**: `/wi:init` content/hybrid 분기 — CI/PR/hook/ownership 선택적 적용, `mkdir -p .flowset/reviews .flowset/approvals` 포함
+- **WI-B2**: `/wi:start` 3모드 분기 (Phase 6 재구성: 루프/대화형/팀)
+- **WI-B3**: contracts class별 템플릿 — `style-guide.md` + `review-rubric.md` 신설
+
+### Group γ (매트릭스 SSOT, 8 WI)
+- **WI-C1**: `/wi:prd` Step 2.5 Role 추출 + 매트릭스 셀 의무 + `prd-state.json` v2 확장 (entities/roles/crud_matrix/permission_matrix)
+- **WI-C2**: `sprint-template.md` CRUD/Section 매트릭스 + Gherkin 강제 (자유 텍스트 금지)
+- **WI-C3-parse**: `parse-gherkin.sh` 신설 (cucumber CLI 미설치 환경 fallback, JSON 출력 계약)
+- **WI-C3-code**: `stop-rag-check.sh` 섹션 6/7/8 신설 — **B2/B3/B4 차단**
+  - B2: `src/api/**` 변경 시 `auth_patterns[]` grep, 매칭 실패 → block
+  - B3: 같은 interface/type 다른 파일 2개+ → block
+  - B4: Gherkin 시나리오 ↔ tests 개수 + 이름 부분 매칭, 실패 → block
+- **WI-C3-content**: `stop-rag-check.sh` 섹션 9/10 신설 — **B6/B7 차단**
+  - B6: `matrix.sections[].sources[]` 파일 존재 + URL 형식 검증
+  - B7: `completeness_checklist` 항목이 변경된 content 파일 본문에 등장 (paths 매핑 옵션)
+- **WI-C4**: `evaluator.md` v3.3 → v4.0 — **type=content/hybrid 신설** + cell_coverage/scenario_coverage 채점 축
+- **WI-C5**: `verify-requirements.sh` 매트릭스 대조 (git diff ↔ matrix.json 셀, class별 분기)
+- **WI-C6**: `session-start-vault.sh` 미완 셀 우선 주입 (B5)
+
+### Group δ (문서, 2 WI)
+- **WI-D1**: `templates/CLAUDE.md` 핵심 규칙 → 4-class 분화 (code/content/hybrid) + 9번 "증거 기반 완료 보고" 신설 + 자동 강제 class별 분기. `README.md` v4.0 PROJECT_CLASS 시스템 표 + B1~B7 차단 매핑 + Stop hook §6/7/8/9/10
+- **WI-D2**: 본 CHANGELOG v4.0 항목
+
+### Stop hook 자동 차단 (B1~B7)
+
+| ID | 차단 대상 | hook 위치 | 영역 |
+|----|----------|---------|------|
+| B1 | `matrix.status` 미완 셀 | evaluator FAIL | code/content |
+| B2 | `auth_patterns[]` 매칭 실패 | stop-rag-check.sh §7 | code |
+| B3 | 같은 interface/type 다른 파일 2개+ | stop-rag-check.sh §6 | code |
+| B4 | Gherkin↔테스트 개수/이름 매핑 실패 | stop-rag-check.sh §8 | code |
+| B5 | 미완 셀 우선 주입 | session-start-vault.sh | code/content |
+| B6 | `matrix.sections[].sources[]` 깨진 파일/URL | stop-rag-check.sh §9 | content |
+| B7 | `completeness_checklist` 본문 미등장 | stop-rag-check.sh §10 | content |
+
+### evaluator 4-class 채점 (WI-C4)
+
+- **type: code**: 기능+cell_coverage / 코드품질 / 테스트+scenario_coverage / 계약+auth_patterns
+- **type: content** (신설): 완결성+cell_coverage / 출처무결성 / 리뷰증적 / 형식일관성
+- **type: hybrid** (신설): code 영역 + content 영역 변경량(line) 가중 평균 또는 strict mode (`coverage_mode: strict`)
+- **type: 비주얼** (legacy 보존)
+
+### 누적 학습 패턴 (33개)
+
+본 v4.0 사이클에서 도출된 신규 패턴 (이전 29개 + 본 사이클 +4):
+
+- **30**: bash heredoc backslash escape 함정 — `cat -A` 또는 `awk | tr -d -c '\\' | wc -c`로 검증
+- **31**: Windows jq.exe stdout CRLF — 모든 `jq -r` 결과에 `| tr -d '\r'` 의무 (SSOT 패턴)
+- **32**: decision JSON은 `jq -nc --arg` 의무 — `printf+sed` escape 회귀 차단
+- **33**: 헬퍼 함수 분리 시 `verify-requirements.sh`의 `_underscore_prefix` + `local _x="$1"` + `while IFS= read` 컨벤션 차용
+
+### 마이그레이션 (v3.x → v4.0)
+
+기존 프로젝트는 **자동 덮어쓰기 금지** — 사용자 커스터마이징 보존:
+
+1. **`.flowsetrc`**: `PROJECT_CLASS=code` 기본값 → 기존 동작 그대로 (jq 의존성만 추가 — `install.sh`가 자동 안내)
+2. **`prd-state.json`**: `migrate_prd_state_v1_to_v2()` idempotent 자동 실행 (`/wi:prd` Step 0)
+3. **`stop-rag-check.sh`**: `HAS_MATRIX` 플래그 — `matrix.json` 부재 시 신규 섹션 6~10 모두 skip → 기존 프로젝트 무영향
+4. **`CLAUDE.md`**: 수동 업그레이드 권장 — 기존 `## 핵심 규칙`은 그대로 유지(암묵적 code class 해석), 신규 `/wi:init` 시에만 4-class 분화 적용
+5. **`team-roles.md`**: `class` 필드 없어도 `check-ownership.sh`는 paths 매칭만 수행 → 기존 동작 그대로
+6. **기존 `sprint-{NNN}.md`**: `type: code (legacy)` 플래그로 evaluator가 구버전 채점 (Gherkin 강제 안 함)
+
+### CI
+
+- smoke: 126 → **870 assertion** (19개 그룹 — A1/A2a~e/A3/A4/001/B1~B3/C1/C2/C3p/C3code/C3content/C4/C5/C6/D1/D2)
+- bats: 16 @test
+- shellcheck severity=warning 전체 .sh 통과
+- commit-check: `WI-NNN-[type] 한글 작업명` 정규식 (영숫자 포함 허용 — WI-A2a, WI-C3code 등)
+
+### 의존성 (신규)
+- **jq**: 필수 (matrix.json 처리, parse-gherkin.sh JSON 출력, evaluator coverage 산출)
+- **shellcheck**: 개발용 (CI에서 자동 검증)
+- **bats**: 개발용 (CI에서 자동 검증, submodule 관리)
+- **cucumber CLI**: 옵션 (npm 환경에서 1순위, 미설치 시 `parse-gherkin.sh` fallback)
+
+### 주요 파일 변경
+- 신규: `templates/.flowset/spec/matrix.json` (SSOT 스키마), `parse-gherkin.sh`, `verify-requirements.sh` (매트릭스 대조), `templates/lib/state.sh` + 4 모듈 (preflight/worker/merge/vault), `templates/.flowset/contracts/style-guide.md` + `review-rubric.md`, `tests/bats_tests/core.bats`, `tests/run-smoke-WI-*.sh` 22개, `.github/workflows/flowset-ci.yml`
+- 확장: `templates/.claude/agents/evaluator.md` (186→370줄, 4-class), `templates/CLAUDE.md` (48→97줄, class 분화), `templates/.flowset/scripts/stop-rag-check.sh` (155→428줄, 섹션 6~10), `session-start-vault.sh` (130→227줄, 미완 셀 주입)
+
 ## [v3.4.0] - 2026-04-03
 
 ### 토큰 최적화 — vault 누적 방지 + rules 경량화
