@@ -62,7 +62,7 @@ jobs:
         run: bash tests/bats/bin/bats tests/bats_tests/core.bats
 
   smoke:
-    name: bash smoke (126 + A3 17 + 001 40 + B1 27 + B2 36 + B3 35 + C1 60 + C2 42 + C5 42 + C6 41 + C3p 45 + C3code 39 + C3content 47 + C4 79 + D1 99 + D2 89 = 864 assertion)
+    name: bash smoke (126 + A3 17 + 001 40 + B1 27 + B2 36 + B3 35 + C1 60 + C2 42 + C5 42 + C6 41 + C3p 45 + C3code 39 + C3content 47 + C4 79 + D1 99 + D2 95 = 870 assertion)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

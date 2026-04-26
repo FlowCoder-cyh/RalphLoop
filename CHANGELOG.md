@@ -84,7 +84,7 @@
 
 ### CI
 
-- smoke: 126 → **775 assertion** (15개 그룹 — A2a~e/A3/001/B1~B3/C1~C6/C3p/C3code/C3content/C4/D1)
+- smoke: 126 → **870 assertion** (19개 그룹 — A1/A2a~e/A3/A4/001/B1~B3/C1/C2/C3p/C3code/C3content/C4/C5/C6/D1/D2)
 - bats: 16 @test
 - shellcheck severity=warning 전체 .sh 통과
 - commit-check: `WI-NNN-[type] 한글 작업명` 정규식 (영숫자 포함 허용 — WI-A2a, WI-C3code 등)
@@ -96,8 +96,8 @@
 - **cucumber CLI**: 옵션 (npm 환경에서 1순위, 미설치 시 `parse-gherkin.sh` fallback)
 
 ### 주요 파일 변경
-- 신규: `templates/.flowset/spec/matrix.json` (SSOT 스키마), `parse-gherkin.sh`, `verify-requirements.sh` (매트릭스 대조), `lib/state.sh` + 4 모듈, `templates/.flowset/contracts/style-guide.md` + `review-rubric.md`, `tests/bats_tests/core.bats`, `tests/run-smoke-WI-*.sh` 18개, `.github/workflows/flowset-ci.yml`
-- 확장: `templates/.claude/agents/evaluator.md` (186→328줄, 4-class), `templates/CLAUDE.md` (48→86줄, class 분화), `templates/.flowset/scripts/stop-rag-check.sh` (155→344줄, 섹션 6~10), `session-start-vault.sh` (130→225줄, 미완 셀 주입)
+- 신규: `templates/.flowset/spec/matrix.json` (SSOT 스키마), `parse-gherkin.sh`, `verify-requirements.sh` (매트릭스 대조), `templates/lib/state.sh` + 4 모듈 (preflight/worker/merge/vault), `templates/.flowset/contracts/style-guide.md` + `review-rubric.md`, `tests/bats_tests/core.bats`, `tests/run-smoke-WI-*.sh` 22개, `.github/workflows/flowset-ci.yml`
+- 확장: `templates/.claude/agents/evaluator.md` (186→370줄, 4-class), `templates/CLAUDE.md` (48→97줄, class 분화), `templates/.flowset/scripts/stop-rag-check.sh` (155→428줄, 섹션 6~10), `session-start-vault.sh` (130→227줄, 미완 셀 주입)
 
 ## [v3.4.0] - 2026-04-03
 

@@ -275,11 +275,21 @@ else
   fail "의존성 필수/옵션 구분 누락"
 fi
 
-# CI 섹션 — smoke 카운트 명시
-if echo "$v4_block" | grep -qE 'smoke: 126 → \*\*775 assertion\*\*'; then
-  pass "CI smoke 카운트 진화 (126 → 775)"
+# CI 섹션 — smoke 카운트 형식 검증 (자기참조 무한 갱신 회피: 숫자 hardcode 안 함)
+# 정확한 카운트는 아래 cross-check가 담당
+if echo "$v4_block" | grep -qE 'smoke: 126 → \*\*[0-9]+ assertion\*\*'; then
+  pass "CI smoke 카운트 형식 (126 → N assertion)"
 else
-  fail "CI smoke 카운트 누락"
+  fail "CI smoke 카운트 형식 누락"
+fi
+
+# [CRITICAL 해소] CI 카운트가 flowset-ci.yml 실제 job name과 정합 검증 (재발 방지 cross-check)
+# 본 PR 머지 시점에 두 파일이 일치하지 않으면 fail — 자기참조 결함 영구 차단
+ci_count=$(grep -oE 'bash smoke \(.*= ([0-9]+) assertion\)' .github/workflows/flowset-ci.yml | grep -oE '[0-9]+ assertion' | grep -oE '[0-9]+' || echo "0")
+if echo "$v4_block" | grep -qE "smoke: 126 → \*\*${ci_count} assertion\*\*"; then
+  pass "[CRITICAL 해소] CHANGELOG smoke 카운트(${ci_count}) ↔ flowset-ci.yml job name 정합 (자기참조 모순 영구 차단)"
+else
+  fail "[CRITICAL] CHANGELOG ↔ flowset-ci.yml 카운트 불일치 (CI: ${ci_count})"
 fi
 
 # bats / shellcheck / commit-check 4종 CI job 명시
@@ -320,12 +330,41 @@ for ext_file in "evaluator.md" "CLAUDE.md" "stop-rag-check.sh" "session-start-va
   fi
 done
 
-# 줄수 변동 형식 (NN→MM줄)
-if echo "$v4_block" | grep -qE '186→328줄' && \
-   echo "$v4_block" | grep -qE '155→344줄'; then
-  pass "줄수 변동 형식 (evaluator + stop-rag-check)"
+# 줄수 변동 형식 — 평가자 [MEDIUM] 해소: 실제 파일 줄수와 cross-check
+# CHANGELOG에 명시된 변동 후 줄수가 현재 파일의 실제 wc -l과 일치해야 함
+declare -A expected_line_counts=(
+  ["templates/.claude/agents/evaluator.md"]="370"
+  ["templates/CLAUDE.md"]="97"
+  ["templates/.flowset/scripts/stop-rag-check.sh"]="428"
+  ["templates/.flowset/scripts/session-start-vault.sh"]="227"
+)
+for file_path in "${!expected_line_counts[@]}"; do
+  expected="${expected_line_counts[$file_path]}"
+  actual=$(wc -l < "$file_path" 2>/dev/null | tr -d ' ' || echo "0")
+  if [[ "$actual" == "$expected" ]]; then
+    if echo "$v4_block" | grep -qF "→${expected}줄"; then
+      pass "[MEDIUM 해소] ${file_path}: CHANGELOG ${expected}줄 = 실제 ${actual}줄"
+    else
+      fail "[MEDIUM] ${file_path}: 실제 ${actual}줄이지만 CHANGELOG에 →${expected}줄 미명시"
+    fi
+  else
+    fail "${file_path}: 예상 ${expected}줄 ≠ 실제 ${actual}줄 (테스트 anchor 갱신 필요)"
+  fi
+done
+
+# tests 22개 (실제 ls와 일치) — 백틱 등 마크다운 wrapper 무시
+actual_tests=$(ls tests/run-smoke-WI-*.sh 2>/dev/null | wc -l | tr -d ' ')
+if echo "$v4_block" | grep -qE "run-smoke-WI[^[:space:]]* ${actual_tests}개"; then
+  pass "[LOW 해소] tests/run-smoke-WI-*.sh ${actual_tests}개 (CHANGELOG ↔ 실제 ls 일치)"
 else
-  fail "줄수 변동 형식 누락"
+  fail "[LOW] tests 카운트 불일치 (CHANGELOG vs 실제 ${actual_tests}개)"
+fi
+
+# templates/lib/ prefix 통일
+if echo "$v4_block" | grep -qE 'templates/lib/state\.sh'; then
+  pass "[LOW 해소] templates/lib/ prefix 통일 (다른 파일과 일관)"
+else
+  fail "[LOW] lib/state.sh prefix 비일관"
 fi
 
 # ============================================================================
