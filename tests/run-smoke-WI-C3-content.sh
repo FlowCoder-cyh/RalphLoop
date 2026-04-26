@@ -80,12 +80,21 @@ else
 fi
 
 # 7. 학습 31: 섹션 9/10의 jq -r 결과에 tr -d '\r' 파이프 (Windows jq.exe CRLF)
-# .sections jq 추출 라인 2개에 모두 tr -d 적용되어야 함
-sections_jq_count=$(grep -cE "jq -r '\.sections //.*tr -d '" "$STOP_SH" || echo "0")
-if (( sections_jq_count >= 2 )); then
-  pass "[학습 31] 섹션 9/10의 .sections jq -r에 tr -d '\\r' 모두 적용 (${sections_jq_count}회)"
+# 섹션 9의 .sections 추출 1건 + 섹션 10의 section_keys/section_paths/section_items 3건 = 총 4건
+# (섹션 10 리팩토링: section 단위 처리로 jq 3회 호출)
+jq_tr_count=$(grep -cE "jq -r .*tr -d '" "$STOP_SH" || echo "0")
+if (( jq_tr_count >= 5 )); then
+  pass "[학습 31] 모든 jq -r 호출에 tr -d '\\r' 적용 (${jq_tr_count}회 — STOP_HOOK_ACTIVE 1 + auth_patterns 1 + parse-gherkin 3 + sections 4)"
 else
-  fail "[학습 31] .sections jq -r tr -d '\\r' 미적용 (${sections_jq_count}회)"
+  fail "[학습 31] jq -r tr -d '\\r' 미적용 (${jq_tr_count}회, 5+ 기대)"
+fi
+
+# 7b. 섹션 10의 section 단위 jq 호출 3건 (section_keys/section_paths/section_items)
+sec10_jq=$(awk '/^# 10\. completeness_checklist/,/^# 5\. v3.0: Vault/' "$STOP_SH" | grep -cE 'jq -r' || echo "0")
+if (( sec10_jq >= 3 )); then
+  pass "섹션 10: section 단위 jq 호출 ${sec10_jq}건 (keys + paths + items)"
+else
+  fail "섹션 10 jq 호출 부족 (${sec10_jq}건, 3+ 기대)"
 fi
 
 # 8. 변경 파일 추출 1회 (changed_content_files 재사용 — 중복 산출 금지)
@@ -445,7 +454,186 @@ popd > /dev/null
 
 # ============================================================================
 echo ""
-echo "=== WI-C3-content-6: 회귀 차단 — 기존 섹션 1~8 + decision JSON 보존 ==="
+echo "=== WI-C3-content-6: 섹션 10 paths 매핑 — 평가자 [MEDIUM] 해소 ==="
+
+# matrix.sections[].paths 옵션 필드: 변경 파일과 paths 교집합만 검사 (false positive 차단)
+WORK="$TMP_DIR/work-paths"
+mkdir -p "$WORK/.flowset/spec" "$WORK/docs/3.2" "$WORK/docs/data"
+
+pushd "$WORK" > /dev/null
+export HAS_MATRIX=true
+export MATRIX_FILE=".flowset/spec/matrix.json"
+
+# G-1. paths 정확 일치 + 본문에 모든 항목 등장 → block 없음
+cat > ".flowset/spec/matrix.json" <<'EOF'
+{
+  "schema_version": "v2",
+  "class": "content",
+  "sections": {
+    "user-flow": {
+      "paths": ["docs/user-flow.md"],
+      "completeness_checklist": ["goal", "flow"]
+    }
+  }
+}
+EOF
+mkdir -p "docs"
+cat > "docs/user-flow.md" <<'EOF'
+goal: leave request
+flow: submit -> approve
+EOF
+export changed_files="docs/user-flow.md"
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+if ! printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\)'; then
+  pass "G-1. paths 정확 일치 + 본문 모든 항목 등장 → B7 block 없음"
+else
+  fail "G-1. paths 정확 매칭 정상에서 잘못 block (issues=${issues[*]})"
+fi
+
+# G-2. paths 매칭 + 본문 미등장 → block (정확한 section명 + 항목명)
+cat > "docs/user-flow.md" <<'EOF'
+goal: leave request
+EOF
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+if printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\): section=user-flow.*flow'; then
+  pass "G-2. paths 매칭 + 항목 'flow' 미등장 → B7 block (정확한 section명 + 항목명)"
+else
+  fail "G-2. B7 미등장 block 미발생 (issues=${issues[*]:-})"
+fi
+
+# G-3. 디렉토리 prefix 매칭: paths=["docs/3.2/"] → docs/3.2/sub.md 매칭
+cat > ".flowset/spec/matrix.json" <<'EOF'
+{
+  "schema_version": "v2",
+  "class": "content",
+  "sections": {
+    "section-3.2": {
+      "paths": ["docs/3.2/"],
+      "completeness_checklist": ["overview"]
+    }
+  }
+}
+EOF
+cat > "docs/3.2/sub.md" <<'EOF'
+overview: chapter 3.2 introduction
+EOF
+export changed_files="docs/3.2/sub.md"
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+if ! printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\)'; then
+  pass "G-3. 디렉토리 prefix 매칭 (docs/3.2/ → docs/3.2/sub.md) → B7 통과"
+else
+  fail "G-3. prefix 매칭 실패 (issues=${issues[*]})"
+fi
+
+# G-4. **평가자 [MEDIUM] 핵심 해소**: paths 비매칭 section은 skip
+# 매트릭스에 user-flow + data-model 2개 section, user-flow.md만 편집
+# → data-model의 paths(docs/data-model.md)와 매칭 안 됨 → data-model section skip
+# (구버전: data-model의 모든 checklist 항목이 user-flow.md에 강제 → false positive)
+cat > ".flowset/spec/matrix.json" <<'EOF'
+{
+  "schema_version": "v2",
+  "class": "content",
+  "sections": {
+    "user-flow": {
+      "paths": ["docs/user-flow.md"],
+      "completeness_checklist": ["goal", "flow"]
+    },
+    "data-model": {
+      "paths": ["docs/data-model.md"],
+      "completeness_checklist": ["entity", "relation"]
+    }
+  }
+}
+EOF
+cat > "docs/user-flow.md" <<'EOF'
+goal: leave request
+flow: submit -> approve
+EOF
+export changed_files="docs/user-flow.md"
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+# data-model section의 entity/relation은 user-flow.md에 없지만 paths 비매칭이라 skip 되어야 함
+if ! printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\): section=data-model'; then
+  pass "G-4. [MEDIUM 해소] 다른 section(data-model) paths 비매칭 → skip (false positive 0건)"
+else
+  fail "G-4. data-model section이 false positive로 block (issues=${issues[*]})"
+fi
+
+# G-5. paths 있는 + 없는 section 혼재 → 각각 정확히 처리
+# legacy(paths 없음)는 후방 호환 union grep, paths 있음은 path 교집합
+cat > ".flowset/spec/matrix.json" <<'EOF'
+{
+  "schema_version": "v2",
+  "class": "content",
+  "sections": {
+    "modern": {
+      "paths": ["docs/modern.md"],
+      "completeness_checklist": ["modern-key"]
+    },
+    "legacy": {
+      "completeness_checklist": ["legacy-key"]
+    }
+  }
+}
+EOF
+cat > "docs/modern.md" <<'EOF'
+modern-key: modern content
+legacy-key: also here for legacy union grep
+EOF
+export changed_files="docs/modern.md"
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+# modern: paths 매칭 + modern-key 등장 → PASS
+# legacy: paths 없음 → 모든 변경 파일 union grep → modern.md에 legacy-key 있음 → PASS
+if ! printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\)'; then
+  pass "G-5. 혼재 (paths 있는 modern + 없는 legacy) → 각각 정확히 처리 (block 없음)"
+else
+  fail "G-5. 혼재 시나리오 잘못 block (issues=${issues[*]})"
+fi
+
+# G-6. paths 매칭이지만 변경 안 된 파일은 grep 대상 외
+cat > ".flowset/spec/matrix.json" <<'EOF'
+{
+  "schema_version": "v2",
+  "class": "content",
+  "sections": {
+    "user-flow": {
+      "paths": ["docs/user-flow.md", "docs/extra.md"],
+      "completeness_checklist": ["goal"]
+    }
+  }
+}
+EOF
+cat > "docs/user-flow.md" <<'EOF'
+nothing relevant here
+EOF
+cat > "docs/extra.md" <<'EOF'
+goal: but extra not in changed list
+EOF
+# extra.md에 goal이 있지만 changed_files에 없으므로 매칭 대상 외 → block
+export changed_files="docs/user-flow.md"
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+if printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\): section=user-flow.*goal'; then
+  pass "G-6. paths 등록되었지만 변경 안 된 파일은 grep 대상 외 → 미등장 정확 감지"
+else
+  fail "G-6. 변경 외 파일까지 grep해서 false negative (issues=${issues[*]:-})"
+fi
+
+popd > /dev/null
+
+# ============================================================================
+echo ""
+echo "=== WI-C3-content-7: 회귀 차단 — 기존 섹션 1~8 + decision JSON 보존 ==="
 
 # 기존 섹션 1~5 헤더 보존 (WI-C3-code 회귀 차단과 동일 항목)
 for sec_pattern in '^# 1\. RAG' '^# 2\. E2E' '^# 3\. requirements' '^# 4\. 검증 에이전트' '^# 5\. v3.0: Vault' '^# 6\. 타입 중복' '^# 7\. auth middleware' '^# 8\. Gherkin'; do

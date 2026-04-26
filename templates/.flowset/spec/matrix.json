@@ -70,6 +70,10 @@
           "research/user-interviews/2026-03-01.md",
           "https://example.com/research-source"
         ],
+        "paths": [
+          "docs/3.2-User-Flow.md"
+        ],
+        "_paths_comment": "본 섹션의 본문이 위치한 파일 또는 디렉토리. 옵션 필드(없으면 모든 변경 content 파일에 union grep — 후방 호환). Stop hook(WI-C3-content 섹션 10)이 변경 파일과 paths의 교집합만 대상으로 completeness_checklist 검증 → 다른 section의 항목이 본 파일에 강제되지 않음(false positive 차단). prefix 매칭 지원: \"docs/3.2/\"로 등록 시 \"docs/3.2/sub.md\"도 매칭.",
         "completeness_checklist": ["목표", "흐름", "예외케이스"],
         "status": {
           "_comment": "missing | pending | done — 1차 판정은 .flowset/reviews/{section}-{reviewer}.md 파일 존재(설계 §4 :143)",
