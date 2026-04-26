@@ -191,13 +191,17 @@ else
   fail "Role × CRUD 권한 매트릭스 누락"
 fi
 
-# 4. 셀 의무 규칙 — pain point B1/B2/B3
-if grep -qE 'pain point B1 차단' "$SPRINT_MD" && \
-   grep -qE 'pain point B2 차단' "$SPRINT_MD" && \
-   grep -qE 'pain point B3 차단' "$SPRINT_MD"; then
-  pass "code 매트릭스 pain point B1/B2/B3 명시"
+# 4. 셀 의무 규칙 — B1/B2/B3/B4 매핑 (v4int fix 후 SSOT 일치)
+# B1: matrix 미완 셀 차단 (sprint contract = Stop hook 동일 의미)
+# B2/B3: sprint contract 자체 의무 (Stop hook §6/§7와 별개임을 명시)
+# B4: Gherkin↔테스트 (Stop hook §8 매핑)
+if grep -qE '\*\*B1\*\*' "$SPRINT_MD" && \
+   grep -qE '\*\*B2\*\*' "$SPRINT_MD" && \
+   grep -qE '\*\*B3\*\*' "$SPRINT_MD" && \
+   grep -qE '\*\*B4\*\*' "$SPRINT_MD"; then
+  pass "code 매트릭스 B1/B2/B3/B4 매핑 명시 (SSOT 일치)"
 else
-  fail "pain point 명시 부족 (B1/B2/B3)"
+  fail "B-id 매핑 부족 (B1/B2/B3/B4)"
 fi
 
 # 5. type_ssot 단일 SSOT 명시 (예: prisma/schema.prisma#Leave)
