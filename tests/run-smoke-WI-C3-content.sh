@@ -97,6 +97,28 @@ else
   fail "섹션 10 jq 호출 부족 (${sec10_jq}건, 3+ 기대)"
 fi
 
+# 7c. [LOW-2 해소] 섹션 10 헬퍼 함수 분리 (가독성 + 테스트 용이성)
+if grep -qE '^_compute_matching_files\(\)' "$STOP_SH" && \
+   grep -qE '^_check_section_completeness\(\)' "$STOP_SH"; then
+  pass "[LOW-2 해소] 섹션 10 헬퍼 함수 2개 분리 (_compute_matching_files + _check_section_completeness)"
+else
+  fail "[LOW-2] 헬퍼 함수 미분리"
+fi
+
+# 7d. [LOW-1 해소] 섹션 10 영역에 `for cf in $...` 패턴 0건 (공백 파일명 안전 — while read 통일)
+# pipefail + grep 0건(exit 1) 회피: awk 단일 호출로 추출+카운트 (awk만 사용 — pipefail 안전)
+sec10_word_split=$(awk '
+  /^# 10\. completeness_checklist/ { capture = 1 }
+  /^# 5\. v3.0: Vault/ { capture = 0 }
+  capture && /^[[:space:]]*for [[:alnum:]_]+ in \$/ { c++ }
+  END { print c+0 }
+' "$STOP_SH")
+if (( sec10_word_split == 0 )); then
+  pass "[LOW-1 해소] 섹션 10/헬퍼: 'for cf in \$X' word-splitting 0건 (while read 통일)"
+else
+  fail "[LOW-1] 섹션 10/헬퍼에 word-splitting ${sec10_word_split}건"
+fi
+
 # 8. 변경 파일 추출 1회 (changed_content_files 재사용 — 중복 산출 금지)
 content_assign_count=$(grep -cE '^[[:space:]]*changed_content_files=\$\(echo' "$STOP_SH" || echo "0")
 if (( content_assign_count == 1 )); then
@@ -627,6 +649,60 @@ if printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \
   pass "G-6. paths 등록되었지만 변경 안 된 파일은 grep 대상 외 → 미등장 정확 감지"
 else
   fail "G-6. 변경 외 파일까지 grep해서 false negative (issues=${issues[*]:-})"
+fi
+
+popd > /dev/null
+
+# ============================================================================
+echo ""
+echo "=== WI-C3-content-6b: [LOW-1 해소] 공백 파일명 안전 처리 e2e ==="
+
+WORK="$TMP_DIR/work-whitespace"
+mkdir -p "$WORK/.flowset/spec" "$WORK/docs"
+cat > "$WORK/.flowset/spec/matrix.json" <<'EOF'
+{
+  "schema_version": "v2",
+  "class": "content",
+  "sections": {
+    "ws-section": {
+      "paths": ["docs/with space.md"],
+      "completeness_checklist": ["whitespace-key"]
+    }
+  }
+}
+EOF
+cat > "$WORK/docs/with space.md" <<'EOF'
+whitespace-key: documented in whitespace file
+EOF
+
+pushd "$WORK" > /dev/null
+export HAS_MATRIX=true
+export MATRIX_FILE=".flowset/spec/matrix.json"
+
+# G-7. 공백 파일명 + paths 정확 매칭 + 본문 등장 → block 없음
+# (이전 버전: `for cf in $changed_content_files`이 IFS로 word-splitting 되어
+#  "docs/with"과 "space.md" 2개로 쪼개짐 → paths 매칭 실패 → silent skip false negative)
+export changed_files="docs/with space.md"
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+if ! printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\)'; then
+  pass "G-7. [LOW-1 해소] 공백 파일명 (docs/with space.md) + paths 매칭 → B7 정상 (block 없음)"
+else
+  fail "G-7. 공백 파일명 처리 실패 (issues=${issues[*]})"
+fi
+
+# G-8. 공백 파일명 + 항목 미등장 → 정확한 block (false negative 방어)
+cat > "docs/with space.md" <<'EOF'
+some unrelated content
+EOF
+issues=()
+# shellcheck source=/dev/null
+source "$EXTRACT"
+if printf '%s\n' "${issues[@]:-}" | grep -qE 'completeness_checklist 미등장 \(B7\): section=ws-section.*whitespace-key'; then
+  pass "G-8. 공백 파일명 + 항목 미등장 → 정확한 section/항목명 block (false negative 0건)"
+else
+  fail "G-8. 공백 파일명 미등장 감지 실패 (issues=${issues[*]:-})"
 fi
 
 popd > /dev/null

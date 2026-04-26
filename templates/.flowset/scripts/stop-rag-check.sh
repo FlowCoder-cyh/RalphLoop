@@ -272,11 +272,65 @@ fi
 # ============================================================================
 # 설계 §4 :141-146 + §7 :317 — content 경로 변경 시 section의 checklist 항목이
 # section의 paths(매트릭스 옵션 필드)와 매칭되는 변경 파일에 등장해야 함.
-# - paths 있음: 변경 파일과 paths 교집합만 대상 (false positive 차단 — 평가자 [MEDIUM] 해소)
+# - paths 있음: 변경 파일과 paths 교집합만 대상 (false positive 차단)
 # - paths 없음(레거시): 모든 변경 content 파일에 union grep (후방 호환)
 # - paths 있는데 매칭 변경 파일 없음: 본 section은 변경 안 된 것으로 보고 skip
 # 매칭 규칙: 정확 일치 OR 디렉토리 prefix("docs/3.2/" 등록 시 "docs/3.2/sub.md" 매칭)
-# fixed-string(grep -F)로 메타문자 안전.
+# 평가자 [LOW-1] 해소: 모든 file iteration을 `while IFS= read -r`로 통일 → 공백 파일명 안전
+# 평가자 [LOW-2] 해소: nested 4중 loop을 헬퍼 2개로 분리 → 가독성/테스트 용이성 향상
+
+# 헬퍼 1: section의 paths와 changed_content_files 교집합 산출
+# 입력: $1=section_paths(newline-separated). $2=changed_content_files(newline-separated)
+# 출력 글로벌: MATCHING_FILES (newline-separated). paths 없으면 changed_content_files 그대로(legacy)
+_compute_matching_files() {
+  local _paths="$1"
+  local _changed="$2"
+  local _cf _p
+  MATCHING_FILES=""
+  if [[ -z "$_paths" ]]; then
+    MATCHING_FILES="$_changed"
+    return 0
+  fi
+  # 평가자 [LOW-1]: while read로 공백 파일명 안전
+  while IFS= read -r _cf; do
+    [[ -z "$_cf" ]] && continue
+    while IFS= read -r _p; do
+      [[ -z "$_p" ]] && continue
+      if [[ "$_cf" == "$_p" || "$_cf" == "$_p"/* ]]; then
+        MATCHING_FILES+="$_cf"$'\n'
+        break
+      fi
+    done <<< "$_paths"
+  done <<< "$_changed"
+  MATCHING_FILES=$(echo "$MATCHING_FILES" | sed '/^$/d' | sort -u)
+}
+
+# 헬퍼 2: section의 checklist 항목이 matching_files 본문에 등장하는지 검사
+# 입력: $1=section_key, $2=section_items(newline-separated), $3=matching_files(newline-separated)
+# 출력 글로벌: issues += (...)
+_check_section_completeness() {
+  local _section_key="$1"
+  local _items="$2"
+  local _matching_files="$3"
+  local _item _cf _found
+  while IFS= read -r _item; do
+    [[ -z "$_item" ]] && continue
+    _found=false
+    # 평가자 [LOW-1]: while read로 공백 파일명 안전
+    while IFS= read -r _cf; do
+      [[ -z "$_cf" ]] && continue
+      [[ ! -f "$_cf" ]] && continue
+      if grep -qF -- "$_item" "$_cf" 2>/dev/null; then
+        _found=true
+        break
+      fi
+    done <<< "$_matching_files"
+    if [[ "$_found" == "false" ]]; then
+      issues+=("completeness_checklist 미등장 (B7): section=${_section_key} 항목=\"${_item}\" — 매핑된 content 파일 본문에 미등장")
+    fi
+  done <<< "$_items"
+}
+
 if [[ "$HAS_MATRIX" == "true" ]]; then
   changed_content_files="${changed_content_files:-}"
   if [[ -n "$changed_content_files" ]]; then
@@ -285,49 +339,16 @@ if [[ "$HAS_MATRIX" == "true" ]]; then
 
     while IFS= read -r section_key; do
       [[ -z "$section_key" ]] && continue
-
-      # 1. 본 section의 paths 추출 (옵션 필드)
       section_paths=$(jq -r --arg k "$section_key" '.sections[$k].paths // [] | .[]' "$MATRIX_FILE" 2>/dev/null | tr -d '\r' || true)
 
-      # 2. paths 매핑으로 검사 대상 파일 결정
-      matching_files=""
-      if [[ -n "$section_paths" ]]; then
-        # paths 있음: 변경 파일과 교집합 (정확 일치 또는 디렉토리 prefix)
-        for cf in $changed_content_files; do
-          while IFS= read -r p; do
-            [[ -z "$p" ]] && continue
-            if [[ "$cf" == "$p" || "$cf" == "$p"/* ]]; then
-              matching_files+="$cf"$'\n'
-              break
-            fi
-          done <<< "$section_paths"
-        done
-        matching_files=$(echo "$matching_files" | sed '/^$/d' | sort -u)
-        # paths 있는데 매칭 변경 파일 없음 → 본 section 변경 없음 → skip
-        [[ -z "$matching_files" ]] && continue
-      else
-        # paths 없음(레거시): 후방 호환 — 모든 변경 content 파일 union grep
-        matching_files="$changed_content_files"
-      fi
+      # 헬퍼 1: matching_files 산출 (paths 없으면 changed_content_files 그대로)
+      _compute_matching_files "$section_paths" "$changed_content_files"
+      # paths 있는데 매칭 변경 파일 없음 → 본 section 변경 없음 → skip
+      [[ -z "$MATCHING_FILES" ]] && continue
 
-      # 3. 본 section의 checklist 항목 추출
       section_items=$(jq -r --arg k "$section_key" '.sections[$k].completeness_checklist // [] | .[]' "$MATRIX_FILE" 2>/dev/null | tr -d '\r' || true)
-
-      # 4. 각 item이 matching_files 중 어느 하나에라도 등장하는지 검사
-      while IFS= read -r item; do
-        [[ -z "$item" ]] && continue
-        found=false
-        for cf in $matching_files; do
-          [[ ! -f "$cf" ]] && continue
-          if grep -qF -- "$item" "$cf" 2>/dev/null; then
-            found=true
-            break
-          fi
-        done
-        if [[ "$found" == "false" ]]; then
-          issues+=("completeness_checklist 미등장 (B7): section=${section_key} 항목=\"${item}\" — 매핑된 content 파일 본문에 미등장")
-        fi
-      done <<< "$section_items"
+      # 헬퍼 2: checklist 등장 검증
+      _check_section_completeness "$section_key" "$section_items" "$MATCHING_FILES"
     done <<< "$section_keys"
   fi
 fi
