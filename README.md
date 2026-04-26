@@ -7,7 +7,9 @@
 FlowSet은 [Claude Code](https://claude.com/claude-code)를 활용하여 프로젝트를 자동으로 개발하는 시스템입니다.
 요구사항(PRD)만 작성하면, AI가 코드 작성부터 테스트, PR 생성, 머지까지 전부 처리합니다.
 
-**Keywords**: Claude Code automation, AI coding agent, autonomous development, AI pair programming, automated PR workflow, Claude API, Anthropic, AI software engineer, vibe coding
+**v4.0 (현재)**: 매트릭스 기반 검증 게이트웨이 + 4-class 시스템 (code/content/hybrid/visual) + Stop hook B1~B7 자동 차단. 코드 프로젝트(SaaS·앱)뿐 아니라 **content 프로젝트(문서·연구·기획)** 도 동일 워크플로우로 자동화.
+
+**Keywords**: Claude Code automation, AI coding agent, autonomous development, AI pair programming, automated PR workflow, Claude API, Anthropic, AI software engineer, vibe coding, matrix-based validation, code-content hybrid
 
 ---
 
@@ -194,7 +196,30 @@ FlowSet/
     └── .flowsetrc        # 루프 설정 (+ vault 연동 [v3.0])
 ```
 
-### FlowSet 동작 원리 (v3.4)
+### v4.0 PROJECT_CLASS 시스템
+
+`/wi:init` Step 1에서 `PROJECT_CLASS`를 선택 (기본값: `code`).
+
+| PROJECT_CLASS | 매트릭스 영역 | Stop hook 차단 (B1~B7) | evaluator type |
+|---------------|--------------|------------------------|---------------|
+| `code` | `matrix.entities[]` (CRUD × status) | B1 미완 셀 / B2 auth / B3 타입중복 / B4 Gherkin↔테스트 | code (cell+scenario coverage) |
+| `content` | `matrix.sections[]` (draft/review/approve × status) | B1 미완 / B6 sources / B7 completeness_checklist | content (출처/리뷰/형식) |
+| `hybrid` | 양쪽 모두 (`ownership.json.teams[].class` 경로별) | B1~B7 전체 | hybrid (weighted/strict) |
+| `visual` (legacy) | — | — | 비주얼 (디자인/독창성) |
+
+**매트릭스 SSOT**: `.flowset/spec/matrix.json` — `/wi:prd` Step 4가 PROJECT_CLASS에 따라 동적 생성.
+
+**자동 차단 메커니즘** (Stop hook `stop-rag-check.sh`, v4.0 §6/7/8/9/10):
+- B1 (미완 셀): `matrix.status: "missing"` → evaluator FAIL
+- B2 (auth_patterns): `src/api/**` 변경 시 등록 패턴 grep, 매칭 실패 → block
+- B3 (타입 중복): 같은 interface/type 다른 파일 2개+ → block
+- B4 (Gherkin↔테스트): 시나리오 수 + 이름 부분 매칭 검증, 실패 → block
+- B6 (sources): `matrix.sections[].sources[]` 파일 존재 + URL 형식 검증
+- B7 (completeness): `completeness_checklist` 항목이 본문(매핑된 paths)에 등장 검증
+
+**hybrid 동시 변경**: 변경 파일을 class별로 분리 → 각 영역 검증 모두 실행 → 모든 issue 수집 후 한 번에 block.
+
+### FlowSet 동작 원리 (v4.0)
 
 ```
 bash flowset.sh
