@@ -1,5 +1,43 @@
 # Changelog
 
+## [v4.0.2] - 2026-04-27
+
+**자기참조 결함 fix — template/hook commit-check regex 통일 (WI-E2-ci)**
+
+`v4.0.1` evaluator 2차 회의적 검증에서 **POINT-NEW-2 시스템적 결함** 발굴: FlowSet 자체는 `WI-E1-ci`/`WI-A2a-feat`/`WI-C3code-fix` 같은 영문 ID로 동작하면서, 다운스트림 프로젝트에 배포되는 `templates/.github/workflows/commit-check.yml` + `templates/.flowset/hooks/commit-msg`는 숫자만 허용하는 엄격 regex(`^WI-[0-9]{3,4}(-[0-9]+)?-(type)`)였음 → 신규 사용자가 같은 패턴 쓰면 reject. **974 assertion + evaluator 회의적 검증으로 사전 발굴된 자기참조 결함**.
+
+### Layer 1 — template commit-check + commit-msg regex 통일
+- 기존: `^WI-[0-9]{3,4}(-[0-9]+)?-(type) .+` (숫자만, FlowSet 자체와 비일관)
+- 신규: `^WI-[0-9A-Za-z]+(-[0-9]+)?-(type) .+` (영숫자, 루트 `flowset-ci.yml`과 일관)
+- 다운스트림 프로젝트도 `WI-A2a-feat` / `WI-C3code-fix` / `WI-E1-ci` 같은 영문 시작 ID 사용 가능
+- 서브넘버링(`WI-001-1-fix`) 보존 — `(-[0-9]+)?` 그룹 유지
+
+### Layer 2 — REQUIRED_SCRIPTS 정합 (commit-msg)
+- 12개 → **14개** (`parse-gherkin.sh` + `task-completed-eval.sh` 누락 보강)
+- v4.0 신규 스크립트가 다운스트림 첫 커밋 시 누락 검증 통과하도록
+
+### Layer 3 — PATTERN_REVERT 추가 (commit-msg + commit-check.yml)
+- GitHub auto-Revert PR 머지 시 commit-msg reject 차단
+- Merge / Revert 자동 skip 일관 처리
+
+### Layer 4 — cross-check smoke (`tests/run-smoke-WI-E2.sh`, 39 assertion)
+- 3곳 정규식 정합성 동적 검증 (root flowset-ci.yml ↔ template commit-check.yml ↔ template commit-msg)
+- 영숫자 ID 매칭 (실 사용 케이스 6개)
+- 서브넘버링 매칭 (3개)
+- 부정 케이스 reject (5개)
+- 시스템 커밋 + Merge/Revert auto-skip
+- REQUIRED_SCRIPTS ↔ 실제 디렉토리 카운트 + 각 파일명 정합
+
+### CI 통합
+- `flowset-ci.yml` smoke job: 974 → **1013 assertion** (E2 39 신규)
+
+### 학습 패턴 (37개, +1)
+- **37**: FlowSet 자체와 templates의 정규식/스크립트 카운트 비일관 = 자기참조 결함. 메이저 리팩토링 후 templates도 같은 evolution 적용 의무. cross-check smoke로 영구 차단
+
+### 주요 파일 변경
+- 갱신: `templates/.github/workflows/commit-check.yml`, `templates/.flowset/hooks/commit-msg`, `.github/workflows/flowset-ci.yml`, `CHANGELOG.md`
+- 신규: `tests/run-smoke-WI-E2.sh` — `tests/run-smoke-WI-*.sh` 24개 누적 (v4.0.0 23개 → v4.0.2 +1)
+
 ## [v4.0.1] - 2026-04-27
 
 **CI/CD 자동화 — CHANGELOG-driven release + README cross-check smoke (WI-E1-ci)**

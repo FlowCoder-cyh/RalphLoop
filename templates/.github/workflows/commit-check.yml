@@ -25,20 +25,24 @@ jobs:
             exit 0
           fi
 
-          PATTERN="^WI-[0-9]{3,4}(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
+          # WI-E2: 영숫자 ID 허용 통일 (예: WI-A2a-feat, WI-C3code-fix, WI-E1-ci)
+          # 자기참조 결함 fix — 루트 flowset-ci.yml과 동일 패턴 (학습 37)
+          # 서브넘버링(WI-NNN-1-fix) 보존을 위해 (-[0-9]+)? 그룹 유지
+          PATTERN="^WI-[0-9A-Za-z]+(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
           PATTERN_SYSTEM="^WI-(chore|docs) .+"
           PATTERN_MERGE="^Merge "
+          PATTERN_REVERT="^Revert "
           FAILED=0
 
           while IFS= read -r msg; do
-            # GitHub 자동 생성 Merge 커밋은 스킵
-            if [[ "$msg" =~ $PATTERN_MERGE ]]; then
-              echo "SKIP (merge): '$msg'"
+            # GitHub 자동 생성 Merge / Revert 커밋은 스킵
+            if [[ "$msg" =~ $PATTERN_MERGE ]] || [[ "$msg" =~ $PATTERN_REVERT ]]; then
+              echo "SKIP (merge/revert): '$msg'"
               continue
             fi
             if [[ ! "$msg" =~ $PATTERN && ! "$msg" =~ $PATTERN_SYSTEM ]]; then
               echo "FAIL: '$msg'"
-              echo "  Expected: WI-NNN-[type] 한글 작업명  (NNN = 3자리 순번)"
+              echo "  Expected: WI-NNN-[type] 한글 작업명  (NNN = 영숫자 ID, 예: 001, A2a, C3code, E1)"
               echo "  Types: feat, fix, docs, style, refactor, test, chore, perf, ci, revert"
               echo "  System commits (no number): WI-chore ..., WI-docs ..."
               FAILED=1

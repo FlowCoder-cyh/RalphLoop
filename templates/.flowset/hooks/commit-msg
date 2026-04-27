@@ -8,11 +8,15 @@ COMMIT_MSG_FILE="$1"
 COMMIT_MSG=$(head -1 "$COMMIT_MSG_FILE")
 
 # WI-NNN-[type] 패턴 검증 (서브넘버링 WI-NNN-N-fix 허용, 번호 없는 WI-chore도 허용)
-PATTERN="^WI-[0-9]{3,4}(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
+# WI-E2: 영숫자 ID 허용 통일 (예: WI-A2a-feat, WI-C3code-fix, WI-E1-ci)
+# 자기참조 결함 fix — 루트 flowset-ci.yml과 동일 패턴 (학습 37)
+PATTERN="^WI-[0-9A-Za-z]+(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
 PATTERN_SYSTEM="^WI-(chore|docs) .+"
 PATTERN_MERGE="^Merge "
+PATTERN_REVERT="^Revert "
 
 # FlowSet 필수 파일 존재 검증 (첫 커밋 시 누락 방지)
+# WI-E2: v4.0 신규 스크립트 2개(parse-gherkin, task-completed-eval) 추가 — 14개 정합
 REQUIRED_SCRIPTS=(
   ".flowset/scripts/vault-helpers.sh"
   ".flowset/scripts/check-ownership.sh"
@@ -26,6 +30,8 @@ REQUIRED_SCRIPTS=(
   ".flowset/scripts/launch-loop.sh"
   ".flowset/scripts/verify-requirements.sh"
   ".flowset/scripts/rollback.sh"
+  ".flowset/scripts/parse-gherkin.sh"
+  ".flowset/scripts/task-completed-eval.sh"
 )
 missing=()
 for f in "${REQUIRED_SCRIPTS[@]}"; do
@@ -45,17 +51,23 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   exit 1
 fi
 
-if [[ ! "$COMMIT_MSG" =~ $PATTERN && ! "$COMMIT_MSG" =~ $PATTERN_SYSTEM && ! "$COMMIT_MSG" =~ $PATTERN_MERGE ]]; then
+if [[ ! "$COMMIT_MSG" =~ $PATTERN \
+   && ! "$COMMIT_MSG" =~ $PATTERN_SYSTEM \
+   && ! "$COMMIT_MSG" =~ $PATTERN_MERGE \
+   && ! "$COMMIT_MSG" =~ $PATTERN_REVERT ]]; then
   echo ""
   echo "  커밋 메시지 형식 오류"
   echo ""
   echo "  현재: $COMMIT_MSG"
-  echo "  형식: WI-NNN-[type] 한글 작업명  (NNN = 3자리 순번)"
+  echo "  형식: WI-NNN-[type] 한글 작업명  (NNN = 영숫자 ID)"
   echo "  타입: feat, fix, docs, style, refactor, test, chore, perf, ci, revert"
   echo ""
   echo "  예시: WI-001-feat 사용자 인증 추가"
   echo "        WI-015-fix 로그인 토큰 만료 처리"
+  echo "        WI-A2a-refactor lib/state.sh 모듈 분리"
+  echo "        WI-C3code-fix evaluator [MEDIUM/LOW] 즉시 해소"
   echo "  시스템: WI-chore/WI-docs (번호 없이 허용 — 환경 셋업, PRD 문서 등)"
+  echo "  자동 스킵: Merge / Revert 커밋"
   echo ""
   exit 1
 fi
