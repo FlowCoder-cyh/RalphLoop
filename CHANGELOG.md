@@ -1,5 +1,48 @@
 # Changelog
 
+## [v4.0.4] - 2026-04-27
+
+**가이드 문서 placeholder 영숫자 ID 일관화 (WI-E4-docs)**
+
+`v4.0.3` evaluator 4차 만점 검증(10/10) 후 LOW 분류 잔존 항목 후속 처리. 코드 정규식은 v4.0.2/v4.0.3에서 영숫자 통일 + sentinel CI 게이트로 영구 차단 완료. 가이드 문서의 placeholder/표기를 코드와 일관화 — 학습 38 진정 100% 완결.
+
+### Layer 1 — 글로벌 규칙 (`rules/wi-global.md`)
+- 기존: "NNN = 3자리 순번"
+- 신규: "NNN = 영숫자 ID, `[0-9A-Za-z]+(-[0-9]+)?` 패턴 — 숫자(`001`/`015`) / 영숫자(`A2a`/`C3code`/`E1`) / 서브넘버링(`001-1`/`A2a-1`) 모두 허용"
+- 학습 29 (`-` 추가 분절 금지) 명시 추가
+- 예시 6종 (숫자/영숫자/서브넘버링) 추가
+
+### Layer 2 — Agent placeholder
+- `templates/.claude/agents/evaluator.md` L314,353: `WI-{NNN}` → `WI-{ID}` (영숫자 명시)
+- `templates/.claude/agents/lead-workflow.md` L90,128: 동일
+
+### Layer 3 — 프로젝트 템플릿 placeholder
+- `templates/.flowset/fix_plan.md`: 영숫자 ID + 서브넘버링 예시 4종 추가
+- `templates/.flowsetrc:42`: COMMIT_PREFIX 주석 영숫자 명시
+- `templates/.flowset/PROMPT.md` L52,116: 브랜치/커밋 placeholder `WI-{NNN}` → `WI-{ID}` (영숫자)
+- `templates/.flowset/hooks/pre-push:25`: 정규식 `[0-9]{3,4}-chore` → `[0-9A-Za-z]+-chore` (dormant fix)
+
+### Layer 4 — 자기 일관성 + 만점 도달 cleanup (evaluator 6.5 → 10/10)
+evaluator WI-E4 회의적 검증 6.5/10 → 7.5/10 → **10/10** 만점 도달 — 1차 PROMPT.md 자기 일관성 결여 + 2차 evaluator.md/lead-workflow.md 동일 패턴 재발 + 루트 `.claude/agents/` scope 외 부수 발굴 모두 일괄 해소:
+- `templates/.flowset/PROMPT.md` L32, L76, L120 — `WI-{NNN}` → `WI-{ID}` (Layer 3에서 L52/L116만 변경 → 같은 파일 자기 일관성 결여 회복)
+- `templates/.flowset/contracts/sprint-template.md:1` — 헤더 `WI-{NNN}-{type}` → `WI-{ID}-{type}` (evaluator.md/lead-workflow.md가 가리키는 sprint contract 경로 정합)
+- `skills/wi/start.md:114` — WI 자동 번호 부여 자릿수 정책 영숫자 정합 ("99개 이하 → 3자리, 999개 이하 → 3자리, 1000개 이상 → 4자리" → "1000개 이하 3자리, 1000개+ 4자리 + 영숫자 ID 사용자 지정 가능")
+- `templates/.github/PULL_REQUEST_TEMPLATE.md:2` — `WI-NNN-[type]` 부연 명시 추가 (예: 001/A2a/C3code/E1/001-1)
+- `templates/.flowset/hooks/pre-push:34` 에러 메시지 — 영숫자 ID 부연 명시 추가
+- `templates/.claude/agents/evaluator.md:71` — `(sprint-{NNN}.md frontmatter)` → `(sprint-{ID}.md frontmatter)` (1차 동일 패턴 재발 — L312/L350만 변경하고 L71 누락)
+- `templates/.claude/agents/lead-workflow.md:109` — `sprint-{NNN}.md` → `sprint-{ID}.md` (1차 동일 패턴 재발 — L91/L128만 변경하고 L109 누락)
+- 루트 `.claude/agents/evaluator.md` L141, L142, L167 + `lead-workflow.md` L90, L91, L128 (templates/와 동기화 — evaluator 부수 관찰 영역까지 일괄 처리)
+- `tests/run-smoke-WI-D2.sh` `set +o pipefail` 추가 (mawk SIGPIPE 회피, v4_block 대형 파이프 검증 안전)
+
+### 학습 38 진정 100% 완결
+- **코드 영역** (v4.0.2/v4.0.3): 정규식 통일 + sentinel CI 게이트 영구 차단
+- **가이드 문서 영역** (v4.0.4): placeholder/표기 일관화
+- 다운스트림 사용자가 영숫자 WI ID(`WI-A2a`/`WI-C3code`/`WI-E1`) 사용 시 코드/CI/가이드 모두 정상 동작 (silent fail 0건)
+
+### 주요 파일 변경
+- 갱신 (Layer 1-3): `rules/wi-global.md`, `templates/.claude/agents/evaluator.md`, `templates/.claude/agents/lead-workflow.md`, `templates/.flowset/fix_plan.md`, `templates/.flowsetrc`, `templates/.flowset/PROMPT.md`, `templates/.flowset/hooks/pre-push`
+- 갱신 (Layer 4): `templates/.flowset/contracts/sprint-template.md`, `skills/wi/start.md`, `templates/.github/PULL_REQUEST_TEMPLATE.md`
+
 ## [v4.0.3] - 2026-04-27
 
 **학습 37 일반화 — flowset.sh + lib/merge.sh + task-completed-eval.sh 영숫자 WI ID 통일 (WI-E3-ci)**

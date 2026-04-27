@@ -138,8 +138,8 @@ hooks:
 
 ```
 ---EVAL_RESULT---
-WI: WI-{NNN}-{type} {작업명}
-SPRINT_CONTRACT: .flowset/contracts/sprint-{NNN}.md
+WI: WI-{ID}-{type} {작업명}     (ID = 영숫자, 예: 001, A2a, C3code, E1, 001-1)
+SPRINT_CONTRACT: .flowset/contracts/sprint-{ID}.md
 
 SCORES:
 - 기능 완성도/디자인 품질: {0-10} | {구체적 근거 — 파일:줄번호 또는 경로}
@@ -164,7 +164,7 @@ RECOMMENDATION:
 ```
 
 ### 4. 판정
-- **7.0 이상**: PASS → 채점표를 리드에게 반환. **리드가** `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{NNN}.pass` 마커를 생성한다. evaluator는 마커를 만들지 않는다.
+- **7.0 이상**: PASS → 채점표를 리드에게 반환. **리드가** `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{ID}.pass` 마커를 생성한다 (ID = 영숫자, 예: WI-001.pass / WI-A2a.pass). evaluator는 마커를 만들지 않는다.
 - **7.0 미만**: FAIL → 채점표를 리드에게 반환. 리드가 해당 팀원에게 ISSUES 전달 → 수정 → 리드가 다시 evaluator spawn
 - **최대 재평가 3회**: 3회 FAIL이면 리드에게 에스컬레이션
 

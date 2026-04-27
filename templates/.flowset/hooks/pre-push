@@ -22,7 +22,8 @@ done
 if [[ "$PUSHING_TO_MAIN" == true ]]; then
   # 예외 허용: 초기 셋업, PRD 생성, fix_plan 업데이트
   LATEST_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
-  if [[ "$LATEST_MSG" =~ ^WI-(chore|[0-9]{3,4}-chore)\ (프로젝트\ 초기|PRD\ 기반|fix_plan|WI-NNN) ]]; then
+  # WI-E4: 영숫자 ID 허용 통일 (학습 38 일반화)
+  if [[ "$LATEST_MSG" =~ ^WI-(chore|[0-9A-Za-z]+-chore)\ (프로젝트\ 초기|PRD\ 기반|fix_plan|WI-NNN) ]]; then
     exit 0
   fi
 
@@ -30,7 +31,7 @@ if [[ "$PUSHING_TO_MAIN" == true ]]; then
   echo "  main/master 브랜치에 직접 push할 수 없습니다."
   echo "  PR을 통해 머지하세요."
   echo ""
-  echo "  일반 커밋: WI-NNN-[type] 형식 (PR을 통해 머지)"
+  echo "  일반 커밋: WI-NNN-[type] 형식 (NNN = 영숫자 ID — 001/A2a/C3code/E1, PR을 통해 머지)"
   echo "  예외: WI-chore 프로젝트 초기*, WI-chore PRD 기반*, WI-chore fix_plan*"
   echo ""
   exit 1

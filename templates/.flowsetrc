@@ -39,7 +39,7 @@ PARALLEL_COUNT=1
 
 # 브랜치 규칙
 BRANCH_PREFIX="feature"  # feature, fix, chore
-COMMIT_PREFIX="WI"       # WI-NNN-[type] 한글 작업명 (NNN = 3자리 순번)
+COMMIT_PREFIX="WI"       # WI-NNN-[type] 한글 작업명 (NNN = 영숫자 ID, 예: 001, A2a, C3code, E1)
 
 # GitHub 계정 (wi:init Step 4.5에서 설정, wi:start Phase 5.9에서 참조)
 GITHUB_ACCOUNT_TYPE=""   # "org" 또는 "personal"

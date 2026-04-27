@@ -68,7 +68,7 @@ hooks:
   - 양쪽 영역 모두 변경 있어야 발동 — 한쪽 0이면 strict 비활성화 → weighted로 폴백
   - `hybrid_score = min(code_score, content_score)` — 약한 영역이 전체 점수 결정
   - 한쪽만 변경된 hybrid PR에 strict가 잘못 적용되어 N/A score와 min 계산하는 모호성 차단
-- **strict 발동 키워드 형식** (sprint-{NNN}.md frontmatter):
+- **strict 발동 키워드 형식** (sprint-{ID}.md frontmatter):
   ```yaml
   ---
   type: hybrid
@@ -311,8 +311,8 @@ SCORES:
 
 ```
 ---EVAL_RESULT---
-WI: WI-{NNN}-{type} {작업명}
-SPRINT_CONTRACT: .flowset/contracts/sprint-{NNN}.md
+WI: WI-{ID}-{type} {작업명}     (ID = 영숫자, 예: 001, A2a, C3code, E1, 001-1)
+SPRINT_CONTRACT: .flowset/contracts/sprint-{ID}.md
 PROJECT_CLASS: code | content | hybrid | visual
 
 SCORES (type=code):
@@ -350,7 +350,7 @@ RECOMMENDATION:
 ```
 
 ### 4. 판정
-- **7.0 이상**: PASS → 채점표를 리드에게 반환. **리드가** `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{NNN}.pass` 마커를 생성한다. evaluator는 마커를 만들지 않는다.
+- **7.0 이상**: PASS → 채점표를 리드에게 반환. **리드가** `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{ID}.pass` 마커를 생성한다 (ID = 영숫자, 예: WI-001.pass / WI-A2a.pass). evaluator는 마커를 만들지 않는다.
 - **7.0 미만**: FAIL → 채점표를 리드에게 반환. 리드가 해당 팀원에게 ISSUES 전달 → 수정 → 리드가 다시 evaluator spawn
 - **최대 재평가 3회**: 3회 FAIL이면 리드에게 에스컬레이션
 

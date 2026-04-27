@@ -1,4 +1,4 @@
-# Sprint Contract — WI-{NNN}-{type} {작업명}
+# Sprint Contract — WI-{ID}-{type} {작업명}     (ID = 영숫자, 예: 001, A2a, C3code, E1, 001-1)
 
 ## 메타 (WI-C2, v4.0)
 <!--

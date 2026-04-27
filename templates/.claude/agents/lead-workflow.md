@@ -87,8 +87,8 @@ Agent(
 ```
 (Shift+Down으로 팀원 선택 후)
 새 태스크 할당:
-- WI-{NNN}: {작업 내용}
-- 스프린트 계약: .flowset/contracts/sprint-{NNN}.md
+- WI-{ID}: {작업 내용}     (ID = 영숫자, 예: 001, A2a, C3code, E1)
+- 스프린트 계약: .flowset/contracts/sprint-{ID}.md
 작업 완료 후 리드에게 보고해줘.
 ```
 
@@ -106,7 +106,7 @@ Agent(
 
 ```
 evaluator 서브에이전트를 백그라운드로 실행해줘.
-스프린트 계약: .flowset/contracts/sprint-{NNN}.md
+스프린트 계약: .flowset/contracts/sprint-{ID}.md
 변경 파일 (참고용): {팀원이 보고한 파일 목록}
 ※ evaluator가 스프린트 계약 기준으로 관련 파일을 자체 탐색하므로, 이 목록은 시작점일 뿐 전수 조사는 evaluator 책임.
 ```
@@ -125,7 +125,7 @@ evaluator 서브에이전트를 백그라운드로 실행해줘.
    - evaluator 채점 근거에 파일:줄번호가 있는지 확인 (없으면 재평가 요청)
    - 9.0+ 점수인데 ANTI_PATTERNS_FOUND가 비어있으면 → 실제로 완벽한지 의심하고 스팟체크
    - "별거 아니다"류 합리화가 채점 근거에 있으면 감점 여부 재검토 요청
-3. **PASS (7.0+)**: 리드가 마커 생성 → `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{NNN}.pass`
+3. **PASS (7.0+)**: 리드가 마커 생성 → `mkdir -p .flowset/eval-results && touch .flowset/eval-results/WI-{ID}.pass` (ID = 영숫자, 예: WI-001.pass / WI-A2a.pass)
 4. **FAIL (<7.0)**: 리드가 ISSUES를 해당 팀원에게 메시지로 전달 → 팀원 수정 → 리드가 다시 evaluator spawn
 5. **3회 FAIL**: 리드가 직접 판단 또는 사용자에게 에스컬레이션
 

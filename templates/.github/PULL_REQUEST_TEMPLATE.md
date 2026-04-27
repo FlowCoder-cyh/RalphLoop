@@ -1,5 +1,5 @@
 ## WI 정보
-- **WI ID**: WI-NNN-[type]
+- **WI ID**: WI-NNN-[type]   (NNN = 영숫자 ID, 예: 001, A2a, C3code, E1, 001-1)
 - **작업명**:
 
 ## 변경 타입

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# WI-E4 fix: 큰 v4_block을 echo로 grep -q 파이프할 때 mawk(Linux CI)에서
+# SIGPIPE → broken pipe → pipefail 의해 fail. v4_block 누적 증가(v4.0.x 시리즈)로
+# Layer 4부터 발현. 본 smoke는 검증용이므로 pipefail 해제 (set -e + set -u 유지).
+set +o pipefail
 
 # run-smoke-WI-D2.sh — WI-D2 (CHANGELOG.md v4.0 항목) 전용 smoke
 # 핸드오프 Group δ 2/2 이행:

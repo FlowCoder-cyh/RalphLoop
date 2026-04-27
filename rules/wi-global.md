@@ -4,10 +4,15 @@
 다른 파일(CLAUDE.md, PROMPT.md, 스킬)은 이 규칙을 참조만 하며 재정의하지 않습니다.
 
 ## 1. 커밋 규칙
-- 형식: `WI-NNN-[type] 한글 작업명` (NNN = 3자리 순번, fix_plan.md 기준)
+- 형식: `WI-NNN-[type] 한글 작업명` (NNN = 영숫자 ID, fix_plan.md 기준)
+- NNN 허용 패턴: `[0-9A-Za-z]+(-[0-9]+)?` — 숫자(`001`/`015`) / 영숫자(`A2a`/`C3code`/`E1`) / 서브넘버링(`001-1`/`A2a-1`)
 - 허용 타입: feat, fix, docs, style, refactor, test, chore, perf, ci, revert
-- 예시: `WI-001-feat 사용자 인증 추가`, `WI-015-fix 로그인 토큰 만료 처리`
+- 예시:
+  - 숫자 ID: `WI-001-feat 사용자 인증 추가`, `WI-015-fix 로그인 토큰 만료 처리`
+  - 영숫자 ID: `WI-A2a-refactor lib/state.sh 모듈 분리`, `WI-C3code-fix evaluator MEDIUM 즉시 해소`
+  - 서브넘버링: `WI-001-1-fix 후속 핫픽스`
 - 번호 없는 예외: `WI-chore`, `WI-docs` (환경 셋업, PRD 문서 등 시스템 커밋)
+- 학습 29 — `-` 추가 분절 금지: `WI-C3-content` ❌ → `WI-C3content` ✓ (NNN 자리는 한 분절)
 - main/master 직접 push 절대 금지 — 반드시 PR을 통해서만 머지
 - 커밋 메시지는 반드시 한글 작업명 포함
 
