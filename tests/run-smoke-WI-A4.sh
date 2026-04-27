@@ -127,7 +127,7 @@ fi
 echo ""
 echo "=== A4-7: commit-check job이 WI-NNN-[type] 패턴 검증 ==="
 # rules/wi-global.md §1 형식 검증 (fixed string 매칭 — 정규식 메타문자 회피)
-if grep -qF 'WI-[0-9A-Za-z]+-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert)' "$CI_YML"; then
+if grep -qF 'WI-[0-9A-Za-z]+(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert)' "$CI_YML"; then
   pass "commit-check에 WI-NNN-[type] 정규식 존재"
 else
   fail "commit-check 정규식 누락"

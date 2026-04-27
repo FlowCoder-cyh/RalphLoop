@@ -733,8 +733,8 @@ PROJECT_CLASS="${PROJECT_CLASS:-code}"
 mapfile -t PENDING < <(grep -E '^- \[ \] WI-' .flowset/fix_plan.md)
 
 for wi_line in "${PENDING[@]}"; do
-  wi_id=$(echo "$wi_line" | sed -E 's/^- \[ \] (WI-[0-9]+).*/\1/')
-  wi_desc=$(echo "$wi_line" | sed -E 's/^- \[ \] WI-[0-9]+-[a-z]+ ([^|]+).*/\1/')
+  wi_id=$(echo "$wi_line" | sed -E 's/^- \[ \] (WI-[0-9A-Za-z]+(-[0-9]+)?).*/\1/')
+  wi_desc=$(echo "$wi_line" | sed -E 's/^- \[ \] WI-[0-9A-Za-z]+(-[0-9]+)?-[a-z]+ ([^|]+).*/\2/')
 
   read -r -p "${wi_id} ${wi_desc} 진행할까요? [Y/n/s/q]: " ans
   case "${ans:-Y}" in

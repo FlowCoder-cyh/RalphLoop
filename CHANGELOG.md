@@ -39,9 +39,14 @@
   - `'WI-\d+'` literal (PCRE 코드 안)
   - `'WI-[0-9]+'` 단독 정규식
   - `'WI-[0-9]{3,4}'` 한정 정규식
-- 영역: `templates/`, `.flowset/scripts/`, `.github/`
+- 영역: `templates/`, `.flowset/scripts/`, `.github/`, **`skills/`** (evaluator 3차 채점 반영)
 - smoke 자체(WI-E2/E3 부정 케이스 포함)는 exclude
 - 미래 회귀(영숫자 미지원 패턴 추가) PR CI에서 즉시 차단
+
+### Layer 7 — evaluator 만점 채점 cleanup (9.15 → 10 도달)
+- `skills/wi/start.md:736-737` 의사코드 정규식 영숫자 통일 (사용자 복붙 시 영숫자 WI silent skip 차단)
+- `tests/run-smoke-WI-A4.sh:130` fixed-string 회귀 검증에 서브넘버링 그룹 `(-[0-9]+)?` 포함 (commit-check 정규식 변경 추적 정확화)
+- Layer 6 sentinel 검사 영역에 `skills/` 추가 — "templates 전 영역 grep 필수" 학습 38 진정 일반화 완결
 
 ### CI 통합
 - `flowset-ci.yml` smoke job: 1016 → **1070 assertion** (E3 50 + test-vault-transcript 31→35)

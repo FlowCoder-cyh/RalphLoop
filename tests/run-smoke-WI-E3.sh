@@ -254,7 +254,7 @@ SENTINEL_EXCLUDES=(
 )
 
 # 패턴 1: PCRE 'WI-\d{3,4}' (literal 백슬래시 + d{3,4})
-matches=$(grep -rF 'WI-\d{3,4}' templates/ .flowset/scripts/ .github/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
+matches=$(grep -rF 'WI-\d{3,4}' templates/ .flowset/scripts/ .github/ skills/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
 if [[ -z "$matches" ]]; then
   pass "sentinel: 'WI-\\d{3,4}' 영숫자 미지원 PCRE 잔존 0건"
 else
@@ -263,7 +263,7 @@ else
 fi
 
 # 패턴 2: PCRE 'WI-\d+' 단독 (영숫자 미지원)
-matches=$(grep -rF 'WI-\d+' templates/ .flowset/scripts/ .github/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
+matches=$(grep -rF 'WI-\d+' templates/ .flowset/scripts/ .github/ skills/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
 if [[ -z "$matches" ]]; then
   pass "sentinel: 'WI-\\d+' 단독 패턴 잔존 0건"
 else
@@ -273,7 +273,7 @@ fi
 
 # 패턴 3: BRE/ERE 'WI-[0-9]+' 정규식 (영숫자 미지원, 단순 grep -F)
 # templates/scripts (.flowset/scripts/) 코드 안의 정규식 패턴 검사
-matches=$(grep -rF "'WI-[0-9]+" templates/ .flowset/scripts/ .github/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
+matches=$(grep -rF "'WI-[0-9]+" templates/ .flowset/scripts/ .github/ skills/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
 if [[ -z "$matches" ]]; then
   pass "sentinel: 'WI-[0-9]+' 단독 정규식 잔존 0건"
 else
@@ -282,7 +282,7 @@ else
 fi
 
 # 패턴 4: BRE 'WI-[0-9]{3,4}' (templates/.flowset/.github 영역)
-matches=$(grep -rE "WI-\[0-9\]\{3,4\}" templates/ .flowset/scripts/ .github/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
+matches=$(grep -rE "WI-\[0-9\]\{3,4\}" templates/ .flowset/scripts/ .github/ skills/ "${SENTINEL_EXCLUDES[@]}" 2>/dev/null || true)
 if [[ -z "$matches" ]]; then
   pass "sentinel: 'WI-[0-9]{3,4}' 한정 패턴 잔존 0건"
 else
