@@ -34,11 +34,10 @@ echo "=== WI-E3-1: flowset.sh 영숫자 ID 통일 (5개 위치) ==="
 
 # 262, 271, 371: WI-[0-9A-Za-z]+(-[0-9]+)?-[a-z]+ 패턴
 for line_pattern in \
-  "262:prefix.*grep.*WI-\[0-9A-Za-z\]\+\(-\[0-9\]\+\)\?-\[a-z\]\+" \
-  "271:git log.*grep.*WI-\[0-9A-Za-z\]\+\(-\[0-9\]\+\)\?-\[a-z\]\+" \
-  "371:wi_prefix.*grep.*WI-\[0-9A-Za-z\]\+\(-\[0-9\]\+\)\?-\[a-z\]\+"; do
+  "262:prefix" \
+  "271:git log" \
+  "371:wi_prefix"; do
   line_num=$(echo "$line_pattern" | cut -d: -f1)
-  expected=$(echo "$line_pattern" | cut -d: -f2-)
   actual=$(sed -n "${line_num}p" "$FLOWSET_SH")
   if echo "$actual" | grep -qE 'WI-\[0-9A-Za-z\]\+\(-\[0-9\]\+\)\?-\[a-z\]\+'; then
     pass "flowset.sh:${line_num} 영숫자+서브넘버링 패턴 적용"
