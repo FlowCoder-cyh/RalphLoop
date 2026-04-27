@@ -57,7 +57,8 @@ fi
 echo ""
 echo "=== WI-D2-2: 22 WI 매핑 (Group α/β/γ/δ + WI-001) ==="
 
-v4_block=$(awk '/^## \[v4\.0\.0\]/,/^## \[v3\.4\.0\]/' "$CHANGELOG")
+# WI-E1: v4.0.x 패치 시리즈 전체를 검증 범위로 (v4.0.1 자동화 patch 포함)
+v4_block=$(awk '/^## \[v4\.[0-9]+\.[0-9]+\]/,/^## \[v3\.4\.0\]/' "$CHANGELOG")
 
 # Group α 8 WI (A1, A2a~e, A3, A4)
 for wi in "WI-A1" "WI-A2a" "WI-A2b" "WI-A2c" "WI-A2d" "WI-A2e" "WI-A3" "WI-A4"; do
@@ -285,11 +286,12 @@ fi
 
 # [CRITICAL 해소] CI 카운트가 flowset-ci.yml 실제 job name과 정합 검증 (재발 방지 cross-check)
 # 본 PR 머지 시점에 두 파일이 일치하지 않으면 fail — 자기참조 결함 영구 차단
+# WI-E1: v4.0.x 시리즈 어딘가에 최신 ci_count가 등장하면 OK (v4.0.0 섹션은 그 시점 사실 보존)
 ci_count=$(grep -oE 'bash smoke \(.*= ([0-9]+) assertion\)' .github/workflows/flowset-ci.yml | grep -oE '[0-9]+ assertion' | grep -oE '[0-9]+' || echo "0")
-if echo "$v4_block" | grep -qE "smoke: 126 → \*\*${ci_count} assertion\*\*"; then
-  pass "[CRITICAL 해소] CHANGELOG smoke 카운트(${ci_count}) ↔ flowset-ci.yml job name 정합 (자기참조 모순 영구 차단)"
+if echo "$v4_block" | grep -qE "\*\*${ci_count} assertion\*\*"; then
+  pass "[CRITICAL 해소] CHANGELOG v4.0.x 시리즈 smoke 카운트(${ci_count}) ↔ flowset-ci.yml job name 정합"
 else
-  fail "[CRITICAL] CHANGELOG ↔ flowset-ci.yml 카운트 불일치 (CI: ${ci_count})"
+  fail "[CRITICAL] CHANGELOG v4.0.x ↔ flowset-ci.yml 카운트 불일치 (CI: ${ci_count})"
 fi
 
 # bats / shellcheck / commit-check 4종 CI job 명시

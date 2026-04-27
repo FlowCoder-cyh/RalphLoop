@@ -1,0 +1,153 @@
+name: Release (CHANGELOG-driven)
+
+# WI-E1-ci: CHANGELOG.md 최상단 버전이 main에 들어왔는데 tag/release가 없으면 자동 발행.
+#
+# 흐름:
+#   1. CHANGELOG.md 최상단 `## [vX.Y.Z]` 헤더 추출
+#   2. 해당 tag 존재 확인 (origin remote)
+#   3. 미존재 시:
+#      a. 다음 `## [v` 직전까지 섹션 추출 → release notes
+#      b. tag 생성 + push
+#      c. gh release create
+#   4. 존재 시 skip (idempotent)
+#
+# 트리거: main 브랜치 push에 CHANGELOG.md 변경 포함 시.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - CHANGELOG.md
+
+permissions:
+  contents: write
+
+# 동시 release 발행 race 방지 — 같은 ref에서 release job 1개만 실행
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Auto-publish release from CHANGELOG
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract latest version from CHANGELOG
+        id: extract
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -m1 -oE '^## \[v[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          if [[ -z "$VERSION" ]]; then
+            echo "ERROR: CHANGELOG.md 최상단에 ## [vX.Y.Z] 헤더 없음"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Latest CHANGELOG version: $VERSION"
+
+      - name: Check if tag and release already exist
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract.outputs.version }}"
+
+          TAG_EXISTS=0
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
+            TAG_EXISTS=1
+          fi
+
+          RELEASE_EXISTS=0
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            RELEASE_EXISTS=1
+          fi
+
+          echo "tag_exists=$TAG_EXISTS" >> "$GITHUB_OUTPUT"
+          echo "release_exists=$RELEASE_EXISTS" >> "$GITHUB_OUTPUT"
+
+          if [[ "$TAG_EXISTS" == "1" && "$RELEASE_EXISTS" == "1" ]]; then
+            echo "Tag and release for $VERSION already exist. Skipping."
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        if: steps.check.outputs.tag_exists != '1' || steps.check.outputs.release_exists != '1'
+        id: notes
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract.outputs.version }}"
+
+          # awk dynamic regex(`"\\["`) 의 char-class 오해석을 회피하기 위해 line-number 기반 추출.
+          # grep -F (literal) + sed 로 escape 의존성 제거 (학습 36, WI-E1 fix).
+          HEADER="## [$VERSION]"
+          START=$(grep -nF -m1 "$HEADER" CHANGELOG.md | cut -d: -f1 || true)
+          if [[ -z "$START" ]]; then
+            echo "ERROR: '$HEADER' 라인을 CHANGELOG.md에서 찾지 못함"
+            exit 1
+          fi
+
+          START_NEXT=$((START + 1))
+          # 다음 ## [v 헤더 라인 (start 이후, 정적 regex만 사용 — dynamic 변수 없음)
+          END=$(awk -v s="$START_NEXT" 'NR >= s && /^## \[v/ {print NR; exit}' CHANGELOG.md || true)
+
+          if [[ -z "$END" ]]; then
+            # 마지막 버전 (다음 헤더 없음) — 끝까지
+            sed -n "${START_NEXT},\$p" CHANGELOG.md > /tmp/release-notes.md
+          else
+            END_PREV=$((END - 1))
+            sed -n "${START_NEXT},${END_PREV}p" CHANGELOG.md > /tmp/release-notes.md
+          fi
+
+          # 빈 노트 방어
+          if [[ ! -s /tmp/release-notes.md ]]; then
+            echo "ERROR: $VERSION 섹션이 비어있음 — CHANGELOG 형식 확인 필요"
+            exit 1
+          fi
+
+          echo "Release notes for $VERSION:"
+          head -5 /tmp/release-notes.md
+          echo "..."
+          wc -l /tmp/release-notes.md
+
+      - name: Create tag (if missing)
+        if: steps.check.outputs.tag_exists != '1'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$VERSION" -m "$VERSION"
+          git push origin "$VERSION"
+
+      - name: Create release (if missing)
+        if: steps.check.outputs.release_exists != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract.outputs.version }}"
+
+          # 헤더 직후 첫 **...** 라인 추출 — line-number 기반 (dynamic regex 회피, 학습 36)
+          HEADER="## [$VERSION]"
+          START=$(grep -nF -m1 "$HEADER" CHANGELOG.md | cut -d: -f1 || true)
+          if [[ -n "$START" ]]; then
+            TITLE_LINE=$(tail -n +"$((START + 1))" CHANGELOG.md | grep -m1 -E '^\*\*' | sed 's/\*\*//g' || true)
+          else
+            TITLE_LINE=""
+          fi
+
+          if [[ -n "$TITLE_LINE" ]]; then
+            TITLE="$VERSION — $TITLE_LINE"
+          else
+            TITLE="$VERSION"
+          fi
+
+          gh release create "$VERSION" \
+            --title "$TITLE" \
+            --notes-file /tmp/release-notes.md
