@@ -259,7 +259,7 @@ recover_completed_from_history() {
   local recovered=0
   while IFS= read -r line; do
     local prefix
-    prefix=$(echo "$line" | grep -oE 'WI-[0-9]+-[a-z]+' | head -1)
+    prefix=$(echo "$line" | grep -oE 'WI-[0-9A-Za-z]+(-[0-9]+)?-[a-z]+' | head -1)
     [[ -z "$prefix" ]] && continue
     # Check if already in completed_wis.txt
     if [[ -f "$COMPLETED_FILE" ]] && grep -qF "$prefix" "$COMPLETED_FILE" 2>/dev/null; then
@@ -268,7 +268,7 @@ recover_completed_from_history() {
     # If it has a commit on main, it was completed and merged
     echo "$prefix" >> "$COMPLETED_FILE"
     recovered=$((recovered + 1))
-  done < <(git log --oneline main 2>/dev/null | grep -oE '^[a-f0-9]+ WI-[0-9]+-[a-z]+' || true)
+  done < <(git log --oneline main 2>/dev/null | grep -oE '^[a-f0-9]+ WI-[0-9A-Za-z]+(-[0-9]+)?-[a-z]+' || true)
   if [[ $recovered -gt 0 ]]; then
     log "🔄 git log에서 ${recovered}건 완료 WI 복구"
   fi
@@ -368,7 +368,7 @@ resolve_conflicting_prs() {
 
       # completed_wis에서 해당 WI 제거
       local wi_prefix
-      wi_prefix=$(echo "$title" | grep -oE 'WI-[0-9]+-[a-z]+' | head -1)
+      wi_prefix=$(echo "$title" | grep -oE 'WI-[0-9A-Za-z]+(-[0-9]+)?-[a-z]+' | head -1)
       if [[ -n "${wi_prefix:-}" && -f "$COMPLETED_FILE" ]]; then
         grep -v "^${wi_prefix}$" "$COMPLETED_FILE" > "${COMPLETED_FILE}.tmp" 2>/dev/null || true
         mv "${COMPLETED_FILE}.tmp" "$COMPLETED_FILE" 2>/dev/null || true
@@ -464,10 +464,15 @@ validate_post_iteration() {
   latest_msg=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
   prev_commit_msg=$(state_get last_commit_msg)
   if [[ -n "$latest_msg" && "$latest_msg" != "$prev_commit_msg" ]]; then
-    local pattern="^WI-[0-9]{3,4}-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
+    # WI-E3: 영숫자 ID + 서브넘버링 + PATTERN_REVERT 통일 (학습 37 일반화)
+    local pattern="^WI-[0-9A-Za-z]+(-[0-9]+)?-(feat|fix|docs|style|refactor|test|chore|perf|ci|revert) .+"
     local pattern_system="^WI-(chore|docs) .+"
     local pattern_merge="^Merge "
-    if [[ ! "$latest_msg" =~ $pattern && ! "$latest_msg" =~ $pattern_system && ! "$latest_msg" =~ $pattern_merge ]]; then
+    local pattern_revert="^Revert "
+    if [[ ! "$latest_msg" =~ $pattern \
+       && ! "$latest_msg" =~ $pattern_system \
+       && ! "$latest_msg" =~ $pattern_merge \
+       && ! "$latest_msg" =~ $pattern_revert ]]; then
       log "VIOLATION: 커밋 메시지 형식 오류 - $latest_msg"
       violations=$((violations + 1))
     fi
@@ -924,7 +929,7 @@ record_pattern() {
 
   # 도메인 키워드 추출 (한글 + 영문)
   local domain
-  domain=$(echo "$wi_name" | sed 's/WI-[0-9]*-[a-z]* //' | cut -c1-30)
+  domain=$(echo "$wi_name" | sed -E 's/WI-[0-9A-Za-z]+(-[0-9]+)?-[a-z]+ //' | cut -c1-30)
 
   # 패턴 1줄 기록
   echo "- ${result} | ${wi_type} | ${domain} | ${elapsed}s | ${files_list:-none}" >> "$patterns_file"

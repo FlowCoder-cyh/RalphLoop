@@ -158,7 +158,7 @@ inject_regression_wis() {
     [[ -z "$title" ]] && continue
     # 이슈 제목에서 WI 번호 추출 (예: "WI-063 e2e 실패: ...")
     local wi_num
-    wi_num=$(echo "$title" | grep -oE 'WI-[0-9]+' | head -1)
+    wi_num=$(echo "$title" | grep -oE 'WI-[0-9A-Za-z]+' | head -1)
     [[ -z "$wi_num" ]] && continue
 
     # 기존 서브넘버 확인 → 다음 번호 결정
@@ -442,7 +442,7 @@ ${rag_context}"
       wi_type=$(echo "$wi" | grep -oE '(feat|fix|docs|test|chore|refactor|style|perf)' | head -1)
       wi_type="${wi_type:-feat}"
       local wi_num
-      wi_num=$(echo "$wi" | grep -oE 'WI-[0-9]+' | head -1)
+      wi_num=$(echo "$wi" | grep -oE 'WI-[0-9A-Za-z]+' | head -1)
       local pr_branch
       pr_branch="${wi_type}/${wi_num}-${wi_type}-$(echo "$wi" | sed "s/.*${wi_type} //" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g' | sed 's/-$//' | cut -c1-40)"
 

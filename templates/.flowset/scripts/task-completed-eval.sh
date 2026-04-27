@@ -16,8 +16,8 @@ TASK_SUBJECT=$(echo "$INPUT" | jq -r '.task_subject // ""' 2>/dev/null || echo "
 # shellcheck disable=SC2034
 TASK_DESC=$(echo "$INPUT" | jq -r '.task_description // ""' 2>/dev/null || echo "")
 
-# WI 번호 추출 (WI-NNN 패턴)
-WI_NUM=$(echo "$TASK_SUBJECT" | grep -oE 'WI-[0-9]{3,4}' | head -1)
+# WI 번호 추출 (WI-NNN 패턴, 영숫자 ID + 서브넘버링 지원 — WI-E3 통일)
+WI_NUM=$(echo "$TASK_SUBJECT" | grep -oE 'WI-[0-9A-Za-z]+(-[0-9]+)?' | head -1)
 
 if [[ -z "$WI_NUM" ]]; then
   # WI 번호 없으면 일반 태스크 — 통과

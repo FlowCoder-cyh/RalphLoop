@@ -1,5 +1,43 @@
 # Changelog
 
+## [v4.0.3] - 2026-04-27
+
+**학습 37 일반화 — flowset.sh + lib/merge.sh + task-completed-eval.sh 영숫자 WI ID 통일 (WI-E3-ci)**
+
+`v4.0.2` evaluator 회의적 검증에서 **POINT-NEW 3건 → 실제 8개 위치** 발굴. FlowSet 자체는 영문 ID(`WI-E1-ci`/`WI-A2a-feat`/`WI-C3code-fix`) 동작하면서 다운스트림에 배포되는 templates의 8개 위치가 영숫자 미지원 → 다운스트림 영숫자 WI 사용 시 silent fail. WI-E2가 commit-check 영역만 fix하고 잔존시킨 자기참조 결함 일괄 해소.
+
+### Layer 1 — `templates/flowset.sh` 5개 위치 영숫자 ID + 서브넘버링 통일
+- L262: `recover_completed_from_history()` prefix 추출 — `WI-[0-9]+` → `WI-[0-9A-Za-z]+(-[0-9]+)?`
+- L271: git log 추출 정규식 동일 통일
+- L371: PR rebase 실패 시 wi_prefix 추출 통일
+- L467: `validate_post_iteration()` 정규식 + **`PATTERN_REVERT` 추가** (Revert 커밋 violation 방지)
+- L932: domain 추출 sed → `sed -E` ERE + 영숫자 패턴
+
+### Layer 2 — `templates/lib/merge.sh` 2개 위치 영숫자 ID 통일
+- L161: 머지 추적 `wi_num` — `WI-[0-9]+` → `WI-[0-9A-Za-z]+`
+- L445: regression issue 주입 `wi_num` 통일
+
+### Layer 3 — `templates/.flowset/scripts/task-completed-eval.sh:20` 영숫자 ID + 서브넘버링
+- 기존: `WI-[0-9]{3,4}` — 영숫자 WI silent skip → TaskCompleted hook 미동작
+- 신규: `WI-[0-9A-Za-z]+(-[0-9]+)?` — evaluator gate 정상 발동
+
+### Layer 4 — cross-check smoke (`tests/run-smoke-WI-E3.sh`, 36 assertion)
+- 8개 위치 정규식 검증 + 잔존 `WI-[0-9]+` 차단
+- 영숫자 WI commit/issue/머지 메시지 추출 시뮬레이션 (recover/wi_num/WI_NUM 6+4+5건)
+- `validate_post_iteration()` bash regex 매칭 (영숫자 + 서브넘버링 + 시스템 + Merge/Revert 8건)
+- domain 추출 sed -E 시뮬레이션
+
+### CI 통합
+- `flowset-ci.yml` smoke job: 1016 → **1052 assertion** (E3 36 신규)
+- 미래 회귀(template/.flowset/* 영숫자 미지원 패턴 추가) 즉시 차단
+
+### 학습 37 일반화 완결
+"FlowSet 자체와 templates의 정규식 비일관 = 자기참조 결함" + "단일 방향 fix는 반대/측면 위치에 잔존 가능" — WI-E2가 commit-check 영역만 fix하고 flowset.sh/merge.sh/task-completed-eval에 같은 결함 잔존시킨 패턴이 정확한 evidence. **메이저 리팩토링 후 templates 전 영역 grep 필수** (학습 38 후보).
+
+### 주요 파일 변경
+- 갱신: `templates/flowset.sh` (5건), `templates/lib/merge.sh` (2건), `templates/.flowset/scripts/task-completed-eval.sh` (1건), `.github/workflows/flowset-ci.yml`, `CHANGELOG.md`
+- 신규: `tests/run-smoke-WI-E3.sh` — `tests/run-smoke-WI-*.sh` 25개 누적
+
 ## [v4.0.2] - 2026-04-27
 
 **자기참조 결함 fix — template/hook commit-check regex 통일 (WI-E2-ci)**
